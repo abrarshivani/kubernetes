@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/vmware/govmomi"
@@ -483,7 +484,7 @@ func (vs *VSphere) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []st
 	return nameservers, searches
 }
 
-func getVirtualMachineDevices(cfg *VSphereConfig, ctx context.Context, c *govmomi.Client, name string) (*object.VirtualMachine, object.VirtualDeviceList, *object.Datastore, error) {
+func getVirtualMachineDevices(cfg *VSphereConfig, ctx context.Context, c *govmomi.Client, name string) (*object.VirtualMachine, object.VirtualDeviceList, *object.Datastore, *object.Datacenter, error) {
 
 	// Create a new finder
 	f := find.NewFinder(c.Client, true)
@@ -491,29 +492,29 @@ func getVirtualMachineDevices(cfg *VSphereConfig, ctx context.Context, c *govmom
 	// Fetch and set data center
 	dc, err := f.Datacenter(ctx, cfg.Global.Datacenter)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	f.SetDatacenter(dc)
 
 	// Find datastores
 	ds, err := f.Datastore(ctx, cfg.Global.Datastore)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	vmRegex := cfg.Global.WorkingDir + name
 
 	vm, err := f.VirtualMachine(ctx, vmRegex)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	// Get devices from VM
 	vmDevices, err := vm.Device(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return vm, vmDevices, ds, nil
+	return vm, vmDevices, ds, dc, nil
 }
 
 //cleaning up the controller
@@ -552,7 +553,7 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, nodeName string) (diskID string
 	}
 
 	// Get VM device list
-	vm, vmDevices, ds, err := getVirtualMachineDevices(vs.cfg, ctx, c, vSphereInstance)
+	vm, vmDevices, ds, _, err := getVirtualMachineDevices(vs.cfg, ctx, c, vSphereInstance)
 	if err != nil {
 		return "", "", err
 	}
@@ -667,22 +668,58 @@ func getVirtualDiskUUID(newDevice types.BaseVirtualDevice) (string, error) {
 	vd := newDevice.GetVirtualDevice()
 
 	if b, ok := vd.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
-		uuidWithNoHypens := strings.Replace(b.Uuid, "-", "", -1)
-		return strings.ToLower(uuidWithNoHypens), nil
+		uuid := formatVirtualDiskUUID(b.Uuid)
+		return uuid, nil
 	}
 	return "", ErrNoDiskUUIDFound
 }
 
-func getVirtualDiskID(volPath string, vmDevices object.VirtualDeviceList) (string, error) {
+func formatVirtualDiskUUID(uuid string) string {
+
+	uuidwithNoSpace := strings.Replace(uuid, " ", "", -1)
+	uuidWithNoHypens := strings.Replace(uuidwithNoSpace, "-", "", -1)
+	uuid = strings.ToLower(uuidWithNoHypens)
+
+	return uuid
+}
+
+//Gets virtual disk uuid by datastore path. Here, datastore path can be both containing vsan object name or uuid.
+func getVirtualDiskUUIDByPath(volPath string, dc *object.Datacenter, client *govmomi.Client) (string, error) {
+
+	if len(volPath) > 0 && filepath.Ext(volPath) != ".vmdk" {
+		volPath += ".vmdk"
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vdm := object.NewVirtualDiskManager(client.Client)
+	diskUUID, err := vdm.QueryVirtualDiskUuid(ctx, volPath, dc)
+
+	if err != nil {
+		return "", ErrNoDiskUUIDFound
+	}
+
+	diskUUID = formatVirtualDiskUUID(diskUUID)
+
+	return diskUUID, nil
+}
+
+func getVirtualDiskID(volPath string, vmDevices object.VirtualDeviceList, dc *object.Datacenter, client *govmomi.Client) (string, error) {
+
+	volumeUUID, err := getVirtualDiskUUIDByPath(volPath, dc, client)
+
+	if err != nil {
+		glog.Warningf("disk uuid not found for %v ", volPath)
+		return "", err
+	}
+
 	// filter vm devices to retrieve disk ID for the given vmdk file
 	for _, device := range vmDevices {
 		if vmDevices.TypeName(device) == "VirtualDisk" {
-			d := device.GetVirtualDevice()
-			if b, ok := d.Backing.(types.BaseVirtualDeviceFileBackingInfo); ok {
-				fileName := b.GetVirtualDeviceFileBackingInfo().FileName
-				if fileName == volPath {
-					return vmDevices.Name(device), nil
-				}
+			diskUUID, _ := getVirtualDiskUUID(device)
+			if diskUUID == volumeUUID {
+				return vmDevices.Name(device), nil
 			}
 		}
 	}
@@ -710,12 +747,12 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName string) error {
 		vSphereInstance = nodeName
 	}
 
-	vm, vmDevices, _, err := getVirtualMachineDevices(vs.cfg, ctx, c, vSphereInstance)
+	vm, vmDevices, _, dc, err := getVirtualMachineDevices(vs.cfg, ctx, c, vSphereInstance)
 	if err != nil {
 		return err
 	}
 
-	diskID, err := getVirtualDiskID(volPath, vmDevices)
+	diskID, err := getVirtualDiskID(volPath, vmDevices, dc, c)
 	if err != nil {
 		glog.Warningf("disk ID not found for %v ", volPath)
 		return err
