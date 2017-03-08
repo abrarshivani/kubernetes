@@ -402,6 +402,7 @@ func (kl *Kubelet) setNodeAddress(node *v1.Node) error {
 		// TODO(justinsb): We can if CurrentNodeName() was actually CurrentNode() and returned an interface
 		// TODO: If IP addresses couldn't be fetched from the cloud provider, should kubelet fallback on the other methods for getting the IP below?
 		nodeAddresses, err := instances.NodeAddresses(kl.nodeName)
+		glog.V(1).Infof("Node Addresses from kubelet_node_status setnodestatus: %#v", nodeAddresses)
 		if err != nil {
 			return fmt.Errorf("failed to get node address from cloud provider: %v", err)
 		}

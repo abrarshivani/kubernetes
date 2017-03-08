@@ -516,6 +516,8 @@ func (i *Instances) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress,
 			)
 		}
 	}
+
+	glog.V(1).Infof("vSphere Cloud Provider: %#v", addrs)
 	return addrs, nil
 }
 

@@ -3014,8 +3014,10 @@ func ValidateNodeUpdate(node, oldNode *api.Node) field.ErrorList {
 
 	// Validte no duplicate addresses in node status.
 	addresses := make(map[api.NodeAddress]bool)
+	glog.V(1).Infof("Validating Node Address in validation.go: %#v", node.Status.Addresses)
 	for i, address := range node.Status.Addresses {
 		if _, ok := addresses[address]; ok {
+			glog.V(1).Infof("Found duplicate in validation.go: %#v \nAddresses Map: %#v", address, addresses)
 			allErrs = append(allErrs, field.Duplicate(field.NewPath("status", "addresses").Index(i), address))
 		}
 		addresses[address] = true
