@@ -9,7 +9,9 @@ load(
 go_library(
     name = "go_default_library",
     srcs = [
+        "csp.go",
         "nodemanager.go",
+        "vcp.go",
         "vsphere.go",
         "vsphere_util.go",
     ],

@@ -19,7 +19,6 @@ package vsphere
 import (
 	"context"
 	"errors"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -39,58 +38,13 @@ import (
 )
 
 const (
-	DatastoreProperty     = "datastore"
-	DatastoreInfoProperty = "info"
-	Folder                = "Folder"
-	VirtualMachine        = "VirtualMachine"
-	DummyDiskName         = "kube-dummyDisk.vmdk"
-	UUIDPath              = "/sys/class/dmi/id/product_serial"
-	UUIDPrefix            = "VMware-"
-	ProviderPrefix        = "vsphere://"
-	vSphereConfFileEnvVar = "VSPHERE_CONF_FILE"
+	Folder         = "Folder"
+	VirtualMachine = "VirtualMachine"
+	DummyDiskName  = "kube-dummyDisk.vmdk"
+	UUIDPath       = "/sys/class/dmi/id/product_serial"
+	UUIDPrefix     = "VMware-"
+	ProviderPrefix = "vsphere://"
 )
-
-// GetVSphere reads vSphere configuration from system environment and construct vSphere object
-func GetVSphere() (*VSphere, error) {
-	cfg, err := getVSphereConfig()
-	if err != nil {
-		return nil, err
-	}
-	vs, err := newControllerNode(*cfg)
-	if err != nil {
-		return nil, err
-	}
-	return vs, nil
-}
-
-func getVSphereConfig() (*VSphereConfig, error) {
-	confFileLocation := os.Getenv(vSphereConfFileEnvVar)
-	if confFileLocation == "" {
-		return nil, fmt.Errorf("Env variable 'VSPHERE_CONF_FILE' is not set.")
-	}
-	confFile, err := os.Open(confFileLocation)
-	if err != nil {
-		return nil, err
-	}
-	defer confFile.Close()
-	cfg, err := readConfig(confFile)
-	if err != nil {
-		return nil, err
-	}
-	return &cfg, nil
-}
-
-func getVSphereConn(cfg *VSphereConfig) *vclib.VSphereConnection {
-	vSphereConn := &vclib.VSphereConnection{
-		Username:          cfg.Global.User,
-		Password:          cfg.Global.Password,
-		Hostname:          cfg.Global.VCenterIP,
-		Insecure:          cfg.Global.InsecureFlag,
-		RoundTripperCount: cfg.Global.RoundTripperCount,
-		Port:              cfg.Global.VCenterPort,
-	}
-	return vSphereConn
-}
 
 // Returns the accessible datastores for the given node VM.
 func getAccessibleDatastores(ctx context.Context, nodeVmDetail *NodeDetails, nodeManager *NodeManager) ([]*vclib.DatastoreInfo, error) {
@@ -257,7 +211,7 @@ func getPbmCompatibleDatastore(ctx context.Context, dc *vclib.Datacenter, storag
 	return datastore, err
 }
 
-func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter, resourcePoolPath string) (*vclib.VMOptions, error) {
+func (vs *VCP) setVMOptions(ctx context.Context, dc *vclib.Datacenter, resourcePoolPath string) (*vclib.VMOptions, error) {
 	var vmOptions vclib.VMOptions
 	resourcePool, err := dc.GetResourcePool(ctx, resourcePoolPath)
 	if err != nil {
@@ -274,7 +228,7 @@ func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter, resou
 }
 
 // A background routine which will be responsible for deleting stale dummy VM's.
-func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
+func (vs *VCP) cleanUpDummyVMs(dummyVMPrefix string) {
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -379,7 +333,7 @@ func convertVolPathToDevicePath(ctx context.Context, dc *vclib.Datacenter, volPa
 }
 
 // convertVolPathsToDevicePaths removes cluster or folder path from volPaths and convert to canonicalPath
-func (vs *VSphere) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName][]string, error) {
+func (vs *VCP) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName][]string, error) {
 	vmVolumes := make(map[k8stypes.NodeName][]string)
 	for nodeName, volPaths := range nodeVolumes {
 		nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
@@ -407,7 +361,7 @@ func (vs *VSphere) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes
 
 // checkDiskAttached verifies volumes are attached to the VMs which are in same vCenter and Datacenter
 // Returns nodes if exist any for which VM is not found in that vCenter and Datacenter
-func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeName, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, retry bool) ([]k8stypes.NodeName, error) {
+func (vs *VCP) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeName, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, retry bool) ([]k8stypes.NodeName, error) {
 	var nodesToRetry []k8stypes.NodeName
 	var vmList []*vclib.VirtualMachine
 	var nodeInfo NodeInfo
@@ -479,7 +433,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 	return nodesToRetry, nil
 }
 
-func (vs *VSphere) IsDummyVMPresent(vmName string) (bool, error) {
+func (vs *VCP) IsDummyVMPresent(vmName string) (bool, error) {
 	isDummyVMPresent := false
 
 	// Create context
