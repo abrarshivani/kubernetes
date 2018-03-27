@@ -228,17 +228,18 @@ func SetInformers(nodeEvents NodeEvents, informerFactory informers.SharedInforme
 // Creates new worker node interface and returns
 func newWorkerNode() (cloudprovider.Interface, error) {
 	var err error
-	vs := VCP{}
-	vs.hostName, err = os.Hostname()
+	vsphere := VSphere{}
+	vsphere.hostName, err = os.Hostname()
 	if err != nil {
 		glog.Errorf("Failed to get hostname. err: %+v", err)
 		return nil, err
 	}
-	vs.vmUUID, err = GetVMUUID()
+	vsphere.vmUUID, err = GetVMUUID()
 	if err != nil {
 		glog.Errorf("Failed to get uuid. err: %+v", err)
 		return nil, err
 	}
+	vs := VCP{VSphere: &vsphere}
 	return &vs, nil
 }
 
