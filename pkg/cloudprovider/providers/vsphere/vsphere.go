@@ -540,6 +540,6 @@ func (vs *VSphere) HasClusterID() bool {
 }
 
 func (vs *VSphere) CheckVolumeCompliance(volume *v1.PersistentVolume) error {
-	vs.eventRecorder.Event(volume.Spec.ClaimRef, v1.EventTypeWarning, "ComplianceChange", msg)
+	vs.eventRecorder.Event(volume.Spec.ClaimRef, v1.EventTypeWarning, "ComplianceChange", volume.Name + "compliance check")
 	return nil
 }
