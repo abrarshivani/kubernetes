@@ -38,6 +38,11 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/controller"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
+	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
 )
 
 // VSphere Cloud Provider constants
@@ -64,6 +69,10 @@ type VSphere struct {
 	// Maps the VSphere IP address to VSphereInstance
 	vsphereInstanceMap map[string]*VSphereInstance
 	vmUUID             string
+	clientBuilder      controller.ControllerClientBuilder
+	kubeClient         clientset.Interface
+	eventBroadcaster   record.EventBroadcaster
+	eventRecorder      record.EventRecorder
 }
 
 // Represents a vSphere instance where one or more kubernetes nodes are running.
@@ -173,6 +182,8 @@ type Volumes interface {
 
 	// DeleteVolume deletes vmdk.
 	DeleteVolume(vmDiskPath string) error
+
+	CheckVolumeCompliance(volume *v1.PersistentVolume) error
 }
 
 // Parses vSphere cloud config file and stores it into VSphereConfig.
@@ -204,6 +215,11 @@ func init() {
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) {
+	vs.clientBuilder = clientBuilder
+	vs.kubeClient = clientBuilder.ClientOrDie("vsphere-cloud-provider")
+	vs.eventBroadcaster = record.NewBroadcaster()
+	vs.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(vs.kubeClient.CoreV1().RESTClient()).Events("")})
+	vs.eventRecorder = vs.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "vsphere-cloud-provider"})
 }
 
 type NodeEvents interface {
@@ -522,4 +538,9 @@ func (vs *VSphere) Routes() (cloudprovider.Routes, bool) {
 // HasClusterID returns true if the cluster has a clusterID
 func (vs *VSphere) HasClusterID() bool {
 	return true
+}
+
+func (vs *VSphere) CheckVolumeCompliance(volume *v1.PersistentVolume) error {
+	vs.eventRecorder.Event(volume.Spec.ClaimRef, v1.EventTypeWarning, "ComplianceChange", msg)
+	return nil
 }

@@ -108,6 +108,7 @@ func (attacher *vsphereVMDKAttacher) BulkVerifyVolumes(volumesByNode map[types.N
 
 	for nodeName, volumeSpecs := range volumesByNode {
 		for _, volumeSpec := range volumeSpecs {
+			attacher.vsphereVolumes.CheckVolumeCompliance(volumeSpec.PersistentVolume)
 			volumeSource, _, err := getVolumeSource(volumeSpec)
 			if err != nil {
 				glog.Errorf("Error getting volume (%q) source : %v", volumeSpec.Name(), err)
