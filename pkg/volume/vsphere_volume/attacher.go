@@ -105,10 +105,10 @@ func (attacher *vsphereVMDKAttacher) BulkVerifyVolumes(volumesByNode map[types.N
 	volumesAttachedCheck := make(map[types.NodeName]map[*volume.Spec]bool)
 	volumePathsByNode := make(map[types.NodeName][]string)
 	volumeSpecMap := make(map[string]*volume.Spec)
+	pvNodeMap := make(map[types.NodeName][]*v1.PersistentVolume)
 
 	for nodeName, volumeSpecs := range volumesByNode {
 		for _, volumeSpec := range volumeSpecs {
-			attacher.vsphereVolumes.CheckVolumeCompliance(volumeSpec.PersistentVolume)
 			volumeSource, _, err := getVolumeSource(volumeSpec)
 			if err != nil {
 				glog.Errorf("Error getting volume (%q) source : %v", volumeSpec.Name(), err)
@@ -116,6 +116,9 @@ func (attacher *vsphereVMDKAttacher) BulkVerifyVolumes(volumesByNode map[types.N
 			}
 			volPath := volumeSource.VolumePath
 			volumePathsByNode[nodeName] = append(volumePathsByNode[nodeName], volPath)
+			if volumeSpec.PersistentVolume != nil && volumeSpec.PersistentVolume.Spec.VsphereVolume != nil {
+				pvNodeMap[nodeName] = append(pvNodeMap[nodeName], volumeSpec.PersistentVolume)
+			}
 			nodeVolume, nodeVolumeExists := volumesAttachedCheck[nodeName]
 			if !nodeVolumeExists {
 				nodeVolume = make(map[*volume.Spec]bool)
@@ -124,6 +127,10 @@ func (attacher *vsphereVMDKAttacher) BulkVerifyVolumes(volumesByNode map[types.N
 			volumeSpecMap[volPath] = volumeSpec
 			volumesAttachedCheck[nodeName] = nodeVolume
 		}
+	}
+	err := attacher.vsphereVolumes.CheckVolumeCompliance(pvNodeMap)
+	if err != nil {
+		glog.Warningf("Error checking compliance for volumes attached to nodes: %+v. err: %v",pvNodeMap, err)
 	}
 	attachedResult, err := attacher.vsphereVolumes.DisksAreAttached(volumePathsByNode)
 	if err != nil {

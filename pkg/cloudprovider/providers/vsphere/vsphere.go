@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/types"
 )
 
 // VSphere Cloud Provider constants
@@ -53,6 +54,7 @@ const (
 	MacOuiVC                      = "00:50:56"
 	MacOuiEsx                     = "00:0c:29"
 	CleanUpDummyVMRoutineInterval = 5
+	ComplianceChange			  = "ComplianceChange"
 )
 
 var cleanUpRoutineInitialized = false
@@ -182,7 +184,7 @@ type Volumes interface {
 	// DeleteVolume deletes vmdk.
 	DeleteVolume(vmDiskPath string) error
 
-	CheckVolumeCompliance(volume *v1.PersistentVolume) error
+	CheckVolumeCompliance(map[k8stypes.NodeName][]*v1.PersistentVolume) error
 }
 
 // Parses vSphere cloud config file and stores it into VSphereConfig.
@@ -539,9 +541,20 @@ func (vs *VSphere) HasClusterID() bool {
 	return true
 }
 
-func (vs *VSphere) CheckVolumeCompliance(volume *v1.PersistentVolume) error {
-	glog.V(1).Infof("vSphere Generating event")
-	vs.eventRecorder.Event(volume.Spec.ClaimRef, v1.EventTypeNormal, "ComplianceChange", volume.Name + "compliance check")
-	vs.eventRecorder.Event(volume, v1.EventTypeNormal, "PVComplianceChange", volume.Name + "PV compliance check")
+func (vs *VSphere) CheckVolumeCompliance(pvNodeMap map[k8stypes.NodeName][]*v1.PersistentVolume) error {
+	for nodeName, volumes := range pvNodeMap {
+		for _, pv := range volumes {
+			policyName := pv.Spec.VsphereVolume.StoragePolicyName
+			if policyName == "" {
+				continue
+			}
+			volumePath := pv.Spec.VsphereVolume.VolumePath
+			msg := fmt.Sprintf("Checking compliance for volume %s with policy %s attached to node %s", nodeName, policyName, volumePath)
+			glog.V(4).Info(msg)
+			//Check Complilance
+			glog.V(1).Infof("vSphere Generating event")
+			vs.eventRecorder.Event(pv.Spec.ClaimRef, v1.EventTypeWarning, ComplianceChange, msg)
+		}
+	}
 	return nil
 }
