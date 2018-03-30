@@ -544,9 +544,9 @@ func (vs *VSphere) CheckVolumeCompliance(pvNodeMap map[k8stypes.NodeName][]*v1.P
 	for nodeName, volumes := range pvNodeMap {
 		for _, pv := range volumes {
 			policyName := pv.Spec.VsphereVolume.StoragePolicyName
-			if policyName == "" {
-				continue
-			}
+//			if policyName == "" {
+//				continue
+//			}
 			volumePath := pv.Spec.VsphereVolume.VolumePath
 			msg := fmt.Sprintf("Checking compliance for volume %s with policy %s attached to node %s", nodeName, policyName, volumePath)
 			glog.V(4).Info(msg)
