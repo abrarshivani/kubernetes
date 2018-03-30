@@ -8,6 +8,7 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"golang.org/x/net/context"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	"fmt"
 )
 
 type CSP struct {
@@ -111,5 +112,22 @@ func (vs *CSP) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName) ([
 // and other local methods cannot be used here
 func (vs *CSP) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
 	return vs.NodeAddresses(ctx, convertToK8sType(providerID))
+}
+
+func (vs *CSP) CheckVolumeCompliance(pvNodeMap map[k8stypes.NodeName][]*v1.PersistentVolume) error {
+	for nodeName, volumes := range pvNodeMap {
+		for _, pv := range volumes {
+			policyName := pv.Spec.VsphereVolume.StoragePolicyName
+			if policyName == "" {
+				continue
+			}
+			volumePath := pv.Spec.VsphereVolume.VolumePath
+			msg := fmt.Sprintf("Compliance change for volume %s with policy %s attached to node %s", nodeName, policyName, volumePath)
+			//Check Complilance
+			glog.V(4).Info(msg)
+			vs.eventRecorder.Event(pv.Spec.ClaimRef, v1.EventTypeWarning, ComplianceChange, msg)
+		}
+	}
+	return nil
 }
 

@@ -708,3 +708,7 @@ func (vs *VCP) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName) ([
 func (vs *VCP) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
 	return vs.NodeAddresses(ctx, convertToK8sType(providerID))
 }
+
+func (vs *VCP) CheckVolumeCompliance(pvNodeMap map[k8stypes.NodeName][]*v1.PersistentVolume) error {
+	return nil
+}
