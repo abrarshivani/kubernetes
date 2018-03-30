@@ -42,7 +42,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/types"
 )
 
 // VSphere Cloud Provider constants
