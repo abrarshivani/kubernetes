@@ -72,6 +72,9 @@ func (vs *VCP) PVCUpdated(oldObj, newObj interface{}) {
 		return
 	}
 
+	glog.V(4).Infof("OldPVC: %+v", oldPvc)
+	glog.V(4).Infof("NewPVC: %+v", newPvc)
+
 	pv, err := getPersistentVolume(newPvc, vs.pvLister)
 	if err != nil {
 		glog.V(5).Infof("Error getting Persistent Volume for pvc %q : %v", newPvc.UID, err)
