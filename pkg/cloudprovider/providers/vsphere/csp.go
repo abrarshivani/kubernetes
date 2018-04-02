@@ -8,16 +8,22 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"golang.org/x/net/context"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"fmt"
+	"reflect"
 )
 
 type CSP struct {
 	*VSphere
+	pvLister corelisters.PersistentVolumeLister
 }
 
 var _ cloudprovider.Interface = &CSP{}
 var _ cloudprovider.Instances = &CSP{}
 var _ Volumes = &CSP{}
+var _ K8sEvents = &CSP{}
+var _ PVCEvents = &CSP{}
+var _ PVEvents = &CSP{}
 var _ NodeEvents = &CSP{}
 
 func (vs *CSP) SetInformers(informerFactory informers.SharedInformerFactory) {
@@ -25,6 +31,55 @@ func (vs *CSP) SetInformers(informerFactory informers.SharedInformerFactory) {
 		return
 	}
 	SetInformers(vs, informerFactory)
+}
+
+func (vs *CSP) NodeEvents() (NodeEvents, bool) {
+	return vs, true
+}
+
+func (vs *CSP) PVCEvents() (PVCEvents, bool) {
+	return vs, true
+}
+
+func (vs *CSP) PVEvents() (PVEvents, bool) {
+	return vs, true
+}
+
+func (vs *CSP) StorePVLister(pvLister corelisters.PersistentVolumeLister) {
+	vs.pvLister = pvLister
+}
+
+func (vs *CSP) PVCUpdated(oldObj, newObj interface{}) {
+	oldPvc, ok := oldObj.(*v1.PersistentVolumeClaim)
+
+	if oldPvc == nil || !ok {
+		return
+	}
+
+	pv, err := getPersistentVolume(oldPvc, vs.pvLister)
+	if err != nil {
+		glog.V(5).Infof("Error getting Persistent Volume for pvc %q : %v", newPVC.UID, err)
+		return
+	}
+
+	if pv.Spec.PersistentVolumeSource.VsphereVolume  == nil {
+		return
+	}
+
+	newPvc, ok := newObj.(*v1.PersistentVolumeClaim)
+
+	if newPvc == nil || !ok {
+		return
+	}
+
+	newLabels := newPvc.GetLabels()
+	oldLabels := oldPvc.GetLabels()
+	labelsUpdated := reflect.DeepEqual(newLabels, oldLabels)
+
+	if labelsUpdated {
+		// Call update on cns
+		glog.V(1).Infof("Labels Updated to %#v", newLabels)
+	}
 }
 
 // Notification handler when node is added into k8s cluster.

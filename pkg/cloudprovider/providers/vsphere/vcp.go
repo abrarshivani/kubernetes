@@ -29,6 +29,7 @@ type VCP struct {
 var _ cloudprovider.Interface = &VCP{}
 var _ cloudprovider.Instances = &VCP{}
 var _ Volumes = &VCP{}
+var _ K8sEvents = &VCP{}
 var _ NodeEvents = &VCP{}
 
 func (vs *VCP) SetInformers(informerFactory informers.SharedInformerFactory) {
@@ -37,6 +38,19 @@ func (vs *VCP) SetInformers(informerFactory informers.SharedInformerFactory) {
 	}
 	SetInformers(vs, informerFactory)
 }
+
+func (vs *VCP) NodeEvents() (NodeEvents, bool) {
+	return vs, true
+}
+
+func (vs *VCP) PVCEvents() (PVCEvents, bool) {
+	return nil, false
+}
+
+func (vs *VCP) PVEvents() (PVEvents, bool) {
+	return nil, false
+}
+
 
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
 func (vs *VCP) AttachDisk(vmDiskPath string, storagePolicyName string, nodeName k8stypes.NodeName) (diskUUID string, err error) {

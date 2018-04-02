@@ -41,6 +41,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -222,23 +223,52 @@ func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) 
 	vs.eventRecorder = vs.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "vsphere-cloud-provider"})
 }
 
+type K8sEvents interface{
+	NodeEvents() (NodeEvents, bool)
+	PVCEvents() (PVCEvents, bool)
+	PVEvents() (PVEvents, bool)
+}
+
 type NodeEvents interface {
 	NodeAdded(obj interface{})
 	NodeDeleted(obj interface{})
 }
 
+type PVCEvents interface {
+	PVCUpdated(oldObj, newObj interface{})
+}
+
+type PVEvents interface {
+	StorePVLister(corelisters.PersistentVolumeLister)
+}
+
 // Initialize Node Informers
-func SetInformers(nodeEvents NodeEvents, informerFactory informers.SharedInformerFactory) {
+func SetInformers(events K8sEvents, informerFactory informers.SharedInformerFactory) {
 
 	// Only on controller node it is required to register listeners.
 	// Register callbacks for node updates
 	glog.V(4).Infof("Setting up node informers for vSphere Cloud Provider")
-	nodeInformer := informerFactory.Core().V1().Nodes().Informer()
-	nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    nodeEvents.NodeAdded,
-		DeleteFunc: nodeEvents.NodeDeleted,
-	})
-	glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
+	if nodeEvents, ok := events.NodeEvents(); ok {
+		nodeInformer := informerFactory.Core().V1().Nodes().Informer()
+		nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    nodeEvents.NodeAdded,
+			DeleteFunc: nodeEvents.NodeDeleted,
+		})
+		glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
+	}
+	if pvcEvents, ok := events.PVCEvents(); ok {
+		pvcInformer := informerFactory.Core().V1().PersistentVolumeClaims().Informer()
+		pvcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			UpdateFunc:    pvcEvents.PVCUpdated,
+		})
+
+		glog.V(4).Infof("PVC informers in vSphere cloud provider initialized")
+	}
+	if pvEvents, ok := events.PVEvents(); ok {
+		pvLister := informerFactory.Core().V1().PersistentVolumes().Lister()
+		pvEvents.StorePVLister(pvLister)
+		glog.V(4).Infof("PVC informers in vSphere cloud provider initialized")
+	}
 }
 
 // Creates new worker node interface and returns
@@ -426,7 +456,7 @@ func newControllerNode(cfg VSphereConfig) (cloudprovider.Interface, error) {
 		if len(vsphereInstanceMap) > 1 {
 			return nil, errors.New("Multiple vCenters is not supported by cns")
 		}
-		cloud = &CSP{&vs}
+		cloud = &CSP{&vs, nil}
 	}
 
 	runtime.SetFinalizer(&vs, logout)
@@ -538,4 +568,15 @@ func (vs *VSphere) Routes() (cloudprovider.Routes, bool) {
 // HasClusterID returns true if the cluster has a clusterID
 func (vs *VSphere) HasClusterID() bool {
 	return true
+}
+
+func getPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.PersistentVolumeLister) (*v1.PersistentVolume, error) {
+	volumeName := pvc.Spec.VolumeName
+	pv, err := pvLister.Get(volumeName)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to find PV %q in PV informer cache with error : %v", volumeName, err)
+	}
+
+	return pv.DeepCopy(), nil
 }
