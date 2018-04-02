@@ -62,7 +62,7 @@ func (vs *CSP) PVCUpdated(oldObj, newObj interface{}) {
 		return
 	}
 
-	if pv.Spec.PersistentVolumeSource.VsphereVolume  == nil {
+	if pv.Spec.PersistentVolumeSource.VsphereVolume == nil {
 		return
 	}
 
@@ -104,7 +104,6 @@ func (vs *CSP) NodeDeleted(obj interface{}) {
 	glog.V(4).Infof("Node deleted: %+v", node)
 }
 
-
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
 func (csp *CSP) AttachDisk(vmDiskPath string, storagePolicyName string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
 	return diskUUID, nil
@@ -135,7 +134,6 @@ func (csp *CSP) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath str
 func (csp *CSP) DeleteVolume(vmDiskPath string) error {
 	return nil
 }
-
 
 // Instances returns an implementation of Instances for vSphere.
 func (vs *CSP) Instances() (cloudprovider.Instances, bool) {
@@ -185,4 +183,3 @@ func (vs *CSP) CheckVolumeCompliance(pvNodeMap map[k8stypes.NodeName][]*v1.Persi
 	}
 	return nil
 }
-

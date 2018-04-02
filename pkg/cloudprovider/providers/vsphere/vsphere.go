@@ -54,7 +54,7 @@ const (
 	MacOuiVC                      = "00:50:56"
 	MacOuiEsx                     = "00:0c:29"
 	CleanUpDummyVMRoutineInterval = 5
-	ComplianceChange			  = "ComplianceChange"
+	ComplianceChange              = "ComplianceChange"
 )
 
 var cleanUpRoutineInitialized = false
@@ -223,7 +223,7 @@ func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) 
 	vs.eventRecorder = vs.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "vsphere-cloud-provider"})
 }
 
-type K8sEvents interface{
+type K8sEvents interface {
 	NodeEvents() (NodeEvents, bool)
 	PVCEvents() (PVCEvents, bool)
 	PVEvents() (PVEvents, bool)
@@ -259,7 +259,7 @@ func SetInformers(events K8sEvents, informerFactory informers.SharedInformerFact
 	if pvcEvents, ok := events.PVCEvents(); ok {
 		pvcInformer := informerFactory.Core().V1().PersistentVolumeClaims().Informer()
 		pvcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			UpdateFunc:    pvcEvents.PVCUpdated,
+			UpdateFunc: pvcEvents.PVCUpdated,
 		})
 
 		glog.V(4).Infof("PVC informers in vSphere cloud provider initialized")

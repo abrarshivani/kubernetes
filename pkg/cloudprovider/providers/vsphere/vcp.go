@@ -51,7 +51,6 @@ func (vs *VCP) PVEvents() (PVEvents, bool) {
 	return nil, false
 }
 
-
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
 func (vs *VCP) AttachDisk(vmDiskPath string, storagePolicyName string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
 	attachDiskInternal := func(vmDiskPath string, storagePolicyName string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
@@ -595,7 +594,6 @@ func (vs *VCP) InstanceExistsByProviderID(ctx context.Context, providerID string
 	return false, err
 }
 
-
 // InstanceID returns the cloud provider ID of the node with the specified Name.
 func (vs *VCP) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (string, error) {
 
@@ -657,7 +655,6 @@ func (vs *VCP) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (stri
 
 	return instanceID, err
 }
-
 
 // NodeAddresses is an implementation of Instances.NodeAddresses.
 func (vs *VCP) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName) ([]v1.NodeAddress, error) {
