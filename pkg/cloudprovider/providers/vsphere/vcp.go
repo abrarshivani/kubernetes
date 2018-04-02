@@ -17,12 +17,15 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"net"
+	"reflect"
 )
 
 type VCP struct {
 	*VSphere
 	// Responsible for managing discovery of k8s node, their location etc.
+	pvLister    corelisters.PersistentVolumeLister
 	nodeManager *NodeManager
 }
 
@@ -49,6 +52,44 @@ func (vs *VCP) PVCEvents() (PVCEvents, bool) {
 
 func (vs *VCP) PVEvents() (PVEvents, bool) {
 	return nil, false
+}
+
+func (vs *VCP) StorePVLister(pvLister corelisters.PersistentVolumeLister) {
+	vs.pvLister = pvLister
+}
+
+func (vs *VCP) PVCUpdated(oldObj, newObj interface{}) {
+	glog.V(1).Infof("PVC Update called from VCP")
+	oldPvc, ok := oldObj.(*v1.PersistentVolumeClaim)
+
+	if oldPvc == nil || !ok {
+		return
+	}
+
+	newPvc, ok := newObj.(*v1.PersistentVolumeClaim)
+
+	if newPvc == nil || !ok {
+		return
+	}
+
+	pv, err := getPersistentVolume(newPvc, vs.pvLister)
+	if err != nil {
+		glog.V(5).Infof("Error getting Persistent Volume for pvc %q : %v", newPvc.UID, err)
+		return
+	}
+
+	if pv.Spec.PersistentVolumeSource.VsphereVolume == nil {
+		return
+	}
+
+	newLabels := newPvc.GetLabels()
+	oldLabels := oldPvc.GetLabels()
+	labelsUpdated := reflect.DeepEqual(newLabels, oldLabels)
+
+	if labelsUpdated {
+		// Call update on cns
+		glog.V(1).Infof("Labels Updated to %#v", newLabels)
+	}
 }
 
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
