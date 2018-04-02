@@ -56,19 +56,19 @@ func (vs *CSP) PVCUpdated(oldObj, newObj interface{}) {
 		return
 	}
 
-	pv, err := getPersistentVolume(oldPvc, vs.pvLister)
+	newPvc, ok := newObj.(*v1.PersistentVolumeClaim)
+
+	if newPvc == nil || !ok {
+		return
+	}
+
+	pv, err := getPersistentVolume(newPvc, vs.pvLister)
 	if err != nil {
-		glog.V(5).Infof("Error getting Persistent Volume for pvc %q : %v", newPVC.UID, err)
+		glog.V(5).Infof("Error getting Persistent Volume for pvc %q : %v", newPvc.UID, err)
 		return
 	}
 
 	if pv.Spec.PersistentVolumeSource.VsphereVolume == nil {
-		return
-	}
-
-	newPvc, ok := newObj.(*v1.PersistentVolumeClaim)
-
-	if newPvc == nil || !ok {
 		return
 	}
 
