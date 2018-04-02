@@ -47,11 +47,11 @@ func (vs *VCP) NodeEvents() (NodeEvents, bool) {
 }
 
 func (vs *VCP) PVCEvents() (PVCEvents, bool) {
-	return nil, false
+	return vs, true
 }
 
 func (vs *VCP) PVEvents() (PVEvents, bool) {
-	return nil, false
+	return vs, true
 }
 
 func (vs *VCP) StorePVLister(pvLister corelisters.PersistentVolumeLister) {
