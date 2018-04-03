@@ -89,7 +89,7 @@ func (vs *VCP) PVCUpdated(oldObj, newObj interface{}) {
 	oldLabels := oldPvc.GetLabels()
 	labelsUpdated := reflect.DeepEqual(newLabels, oldLabels)
 
-	if labelsUpdated {
+	if !labelsUpdated {
 		// Call update on cns
 		glog.V(1).Infof("Labels Updated to %#v", newLabels)
 	}
