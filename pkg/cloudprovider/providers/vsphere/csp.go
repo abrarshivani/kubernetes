@@ -62,6 +62,10 @@ func (vs *CSP) PVCUpdated(oldObj, newObj interface{}) {
 		return
 	}
 
+	if newPvc.Status.Phase != v1.ClaimBound {
+		return
+	}
+
 	pv, err := getPersistentVolume(newPvc, vs.pvLister)
 	if err != nil {
 		glog.V(5).Infof("Error getting Persistent Volume for pvc %q : %v", newPvc.UID, err)
@@ -74,11 +78,11 @@ func (vs *CSP) PVCUpdated(oldObj, newObj interface{}) {
 
 	newLabels := newPvc.GetLabels()
 	oldLabels := oldPvc.GetLabels()
-	labelsUpdated := reflect.DeepEqual(newLabels, oldLabels)
+	labelsEqual := reflect.DeepEqual(newLabels, oldLabels)
 
-	if labelsUpdated {
+	if !labelsEqual {
+		glog.V(1).Infof("Updating %#v labels to %#v in cns for volume %s", newLabels, pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
 		// Call update on cns
-		glog.V(1).Infof("Labels Updated to %#v", newLabels)
 	}
 }
 
