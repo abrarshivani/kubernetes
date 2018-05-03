@@ -37,7 +37,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["vsphere_test.go"],
+    srcs = [
+        "credentialmanager_test.go",
+        "vsphere_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//pkg/cloudprovider:go_default_library",
