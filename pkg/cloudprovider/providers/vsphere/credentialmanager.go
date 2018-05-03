@@ -9,6 +9,20 @@ import (
 	"k8s.io/client-go/listers/core/v1"
 	"net/http"
 	"sync"
+	"strings"
+	"errors"
+)
+
+// Error Messages
+const (
+	CredentialMissingErrMsg = "Username/Password is missing"
+	UnknownSecretKeyErrMsg  = "Unknown secret key"
+)
+
+// Error constants
+var (
+	ErrCredentialMissing = errors.New(CredentialMissingErrMsg)
+	ErrUnknownSecretKey  = errors.New(UnknownSecretKeyErrMsg)
 )
 
 type SecretCache struct {
@@ -102,4 +116,34 @@ func (cache *SecretCache) parseSecret() error {
 
 	glog.Errorf("Data %+v, ConfData %+v, String Version %q", cache.Secret.Data["vsphere.conf"], confData, string(confData))
 	return gcfg.ReadStringInto(cache, string(confData))
+}
+
+func parseConfig(data map[string][]byte, config map[string]*Credential) error {
+	for credentialKey, credentialValue := range data {
+		credentialKey = strings.ToLower(credentialKey)
+		vcServer := ""
+		if strings.HasSuffix(credentialKey, "password") {
+			vcServer = strings.Split(credentialKey, ".password")[0]
+			if _, ok := config[vcServer]; !ok {
+				config[vcServer] = &Credential{}
+			}
+			config[vcServer].Password = string(credentialValue)
+		} else if strings.HasSuffix(credentialKey, "username") {
+			vcServer = strings.Split(credentialKey, ".username")[0]
+			if _, ok := config[vcServer]; !ok {
+				config[vcServer] = &Credential{}
+			}
+			config[vcServer].User = string(credentialValue)
+		} else {
+			glog.Errorf("Unknown secret key %s", credentialKey)
+			return ErrUnknownSecretKey
+		}
+	}
+	for vcServer, credential := range config {
+		if credential.User == "" || credential.Password == "" {
+			glog.Errorf("Username/Password is missing for server %s", vcServer)
+			return ErrCredentialMissing
+		}
+	}
+	return nil
 }
