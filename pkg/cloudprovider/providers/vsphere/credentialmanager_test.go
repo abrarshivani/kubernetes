@@ -50,11 +50,11 @@ func TestParseSecretConfig(t *testing.T) {
 		},
 		{
 			data: map[string][]byte{
-				"10.20.30.40.username": []byte(testPassword),
+				"10.20.30.40.username": []byte(testUsername),
 			},
 			config: map[string]*Credential{
 				testIP: &Credential{
-					Password: testPassword,
+					User: testUsername,
 				},
 			},
 			expectedError: ErrCredentialMissing,
