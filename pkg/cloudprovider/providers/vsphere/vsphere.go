@@ -61,6 +61,19 @@ var datastoreFolderIDMap = make(map[string]map[string]string)
 var cleanUpRoutineInitLock sync.Mutex
 var cleanUpDummyVMLock sync.RWMutex
 
+// Error Messages
+const (
+	MissingUsernameErrMsg = "Username is missing"
+	MissingPasswordErrMsg = "Password is missing"
+)
+
+// Error constants
+var (
+	ErrUsernameMissing = errors.New(MissingUsernameErrMsg)
+	ErrPasswordMissing  = errors.New(MissingPasswordErrMsg)
+)
+
+
 // VSphere is an implementation of cloud provider Interface for VSphere.
 type VSphere struct {
 	cfg      *VSphereConfig
@@ -289,11 +302,11 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 		if !isSecretInfoProvided {
 			if cfg.Global.User == "" {
 				glog.Error("Global.User is empty!")
-				return nil, errors.New("Global.User is empty!")
+				return nil, ErrUsernameMissing
 			}
 			if cfg.Global.Password == "" {
 				glog.Error("Global.Password is empty!")
-				return nil, errors.New("Global.Password is empty!")
+				return nil, ErrPasswordMissing
 			}
 		}
 
@@ -360,12 +373,12 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 				if vcConfig.User == "" {
 					msg := fmt.Sprintf("vcConfig.User is empty for vc %s!", vcServer)
 					glog.Error(msg)
-					return nil, errors.New(msg)
+					return nil,ErrUsernameMissing
 				}
 				if vcConfig.Password == "" {
 					msg := fmt.Sprintf("vcConfig.Password is empty for vc %s!", vcServer)
 					glog.Error(msg)
-					return nil, errors.New(msg)
+					return nil, ErrPasswordMissing
 				}
 			} else {
 				if vcConfig.User != "" {
@@ -416,8 +429,25 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 
 // Creates new Contreoller node interface and returns
 func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
-	var err error
+	vs, err := buildVSphereFromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	vs.hostName, err = os.Hostname()
+	if err != nil {
+		glog.Errorf("Failed to get hostname. err: %+v", err)
+		return nil, err
+	}
+	vs.vmUUID, err = GetVMUUID()
+	if err != nil {
+		glog.Errorf("Failed to get uuid. err: %+v", err)
+		return nil, err
+	}
+	runtime.SetFinalizer(&vs, logout)
+	return vs, nil
+}
 
+func buildVSphereFromConfig(cfg VSphereConfig) (*VSphere, error) {
 	isSecretInfoProvided := false
 	if cfg.Global.SecretName != "" && cfg.Global.SecretNamespace != "" {
 		isSecretInfoProvided = true
@@ -453,18 +483,6 @@ func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 		isSecretInfoProvided: isSecretInfoProvided,
 		cfg:                  &cfg,
 	}
-
-	vs.hostName, err = os.Hostname()
-	if err != nil {
-		glog.Errorf("Failed to get hostname. err: %+v", err)
-		return nil, err
-	}
-	vs.vmUUID, err = GetVMUUID()
-	if err != nil {
-		glog.Errorf("Failed to get uuid. err: %+v", err)
-		return nil, err
-	}
-	runtime.SetFinalizer(&vs, logout)
 	return &vs, nil
 }
 
