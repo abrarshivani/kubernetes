@@ -1,26 +1,27 @@
 package vsphere
 
 import (
+	"errors"
 	"fmt"
 	"github.com/golang/glog"
-	"gopkg.in/gcfg.v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/listers/core/v1"
 	"net/http"
-	"sync"
 	"strings"
-	"errors"
+	"sync"
 )
 
 // Error Messages
 const (
+	CredentialsNotFoundErrMsg = "Credentials not found"
 	CredentialMissingErrMsg = "Username/Password is missing"
 	UnknownSecretKeyErrMsg  = "Unknown secret key"
 )
 
 // Error constants
 var (
+	ErrCredentialsNotFound = errors.New(CredentialsNotFoundErrMsg)
 	ErrCredentialMissing = errors.New(CredentialMissingErrMsg)
 	ErrUnknownSecretKey  = errors.New(UnknownSecretKeyErrMsg)
 )
@@ -59,7 +60,8 @@ func (secretCredentialManager *SecretCredentialManager) GetCredential(server str
 	// 3. Secret Added but not for asked vCenter Server
 	credential, found := secretCredentialManager.Cache.GetCredential(server)
 	if !found {
-		return nil, fmt.Errorf("credentials not found for server %q", server)
+		glog.Errorf("credentials not found for server %q", server)
+		return nil, ErrCredentialsNotFound
 	}
 	return &credential, nil
 }
@@ -109,13 +111,9 @@ func (cache *SecretCache) parseSecret() error {
 	cache.cacheLock.Lock()
 	defer cache.cacheLock.Unlock()
 
-	confData, found := cache.Secret.Data["vsphere.conf"]
-	if !found {
-		return fmt.Errorf("vsphere.conf not found in cache")
-	}
-
-	glog.Errorf("Data %+v, ConfData %+v, String Version %q", cache.Secret.Data["vsphere.conf"], confData, string(confData))
-	return gcfg.ReadStringInto(cache, string(confData))
+	//glog.Errorf("Data %+v, ConfData %+v, String Version %q", cache.Secret.Data["vsphere.conf"], confData, string(confData))
+	//return gcfg.ReadStringInto(cache, string(confData))
+	return parseConfig(cache.Secret.Data, cache.VirtualCenter)
 }
 
 func parseConfig(data map[string][]byte, config map[string]*Credential) error {

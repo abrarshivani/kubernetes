@@ -70,9 +70,8 @@ const (
 // Error constants
 var (
 	ErrUsernameMissing = errors.New(MissingUsernameErrMsg)
-	ErrPasswordMissing  = errors.New(MissingPasswordErrMsg)
+	ErrPasswordMissing = errors.New(MissingPasswordErrMsg)
 )
-
 
 // VSphere is an implementation of cloud provider Interface for VSphere.
 type VSphere struct {
@@ -373,7 +372,7 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 				if vcConfig.User == "" {
 					msg := fmt.Sprintf("vcConfig.User is empty for vc %s!", vcServer)
 					glog.Error(msg)
-					return nil,ErrUsernameMissing
+					return nil, ErrUsernameMissing
 				}
 				if vcConfig.Password == "" {
 					msg := fmt.Sprintf("vcConfig.Password is empty for vc %s!", vcServer)

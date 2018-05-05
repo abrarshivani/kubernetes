@@ -411,7 +411,7 @@ func (nm *NodeManager) GetNodeInfoWithNodeObject(node *v1.Node) (NodeInfo, error
 	return *nodeInfo, nil
 }
 
-func (nm *NodeManager) CredentialManager() (*SecretCredentialManager) {
+func (nm *NodeManager) CredentialManager() *SecretCredentialManager {
 	nm.credentialManagerLock.Lock()
 	defer nm.credentialManagerLock.Unlock()
 	return nm.credentialManager

@@ -1,9 +1,87 @@
 package vsphere
 
 import (
-	"testing"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
+	"testing"
 )
+
+func TestSecretCredentialManager_GetCredential(t *testing.T) {
+	var (
+		userKey      = "username"
+		passwordKey  = "password"
+		testUser     = "user"
+		testPassword = "password"
+		testServer   = "0.0.0.0"
+	)
+	var (
+		secretName      = "vsconf"
+		secretNamespace = "kube-system"
+	)
+	var (
+		addSecretOp      = "ADD_SECRET_OP"
+		getCredentialsOp = "GET_CREDENTIAL_OP"
+		deleteSecretOp   = "DELETE_SECRET_OP"
+	)
+	type GetCredentialsTest struct {
+		server   string
+		username string
+		password string
+		err      error
+	}
+	type OpSecretTest struct {
+		secret *corev1.Secret
+	}
+	type testEnv struct {
+		testName       string
+		ops            []string
+		expectedValues []interface{}
+	}
+
+	metaObj := metav1.ObjectMeta{
+		Name:      secretName,
+		Namespace: secretNamespace,
+	}
+
+	defaultSecret := &corev1.Secret{
+		ObjectMeta: metaObj,
+		Data: map[string][]byte{
+			testServer + "." + userKey:     []byte(testUser),
+			testServer + "." + passwordKey: []byte(testPassword),
+		},
+	}
+
+	tests := []testEnv{
+		{
+			testName: "Deleting secret should give the credentials from cache",
+			ops:      []string{addSecretOp, getCredentialsOp, deleteSecretOp, getCredentialsOp},
+			expectedValues: []interface{}{
+				OpSecretTest{
+					secret: defaultSecret,
+				},
+				GetCredentialsTest{
+					username: testUser,
+					password: testPassword,
+					server:   testServer,
+				},
+				OpSecretTest{
+					secret: defaultSecret,
+				},
+				GetCredentialsTest{
+					username: testUser,
+					password: testPassword,
+					server:   testServer,
+				},
+			},
+		},
+
+	}
+
+	for _, test := range tests {
+		t.Logf("Executing Testcase: %s", test.testName)
+	}
+}
 
 func TestParseSecretConfig(t *testing.T) {
 	var (
@@ -12,7 +90,7 @@ func TestParseSecretConfig(t *testing.T) {
 		testIP       = "10.20.30.40"
 	)
 	var testcases = []struct {
-		testName 	  string
+		testName      string
 		data          map[string][]byte
 		config        map[string]*Credential
 		expectedError error
@@ -24,7 +102,7 @@ func TestParseSecretConfig(t *testing.T) {
 				"10.20.30.40.password": []byte(testPassword),
 			},
 			config: map[string]*Credential{
-				testIP: &Credential{
+				testIP: {
 					User:     testUsername,
 					Password: testPassword,
 				},
@@ -46,7 +124,7 @@ func TestParseSecretConfig(t *testing.T) {
 				"10.20.30.40.password": []byte(testPassword),
 			},
 			config: map[string]*Credential{
-				testIP: &Credential{
+				testIP: {
 					Password: testPassword,
 				},
 			},
@@ -58,7 +136,7 @@ func TestParseSecretConfig(t *testing.T) {
 				"10.20.30.40.username": []byte(testUsername),
 			},
 			config: map[string]*Credential{
-				testIP: &Credential{
+				testIP: {
 					User: testUsername,
 				},
 			},
