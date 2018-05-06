@@ -3,8 +3,12 @@ package vsphere
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 	"reflect"
 	"testing"
+	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 func TestSecretCredentialManager_GetCredential(t *testing.T) {
@@ -14,6 +18,7 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 		testUser     = "user"
 		testPassword = "password"
 		testServer   = "0.0.0.0"
+		//testIncorrectServer = "1.1.1.1"
 	)
 	var (
 		secretName      = "vsconf"
@@ -39,6 +44,7 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 		expectedValues []interface{}
 	}
 
+	client := &fake.Clientset{}
 	metaObj := metav1.ObjectMeta{
 		Name:      secretName,
 		Namespace: secretNamespace,
@@ -75,7 +81,17 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 				},
 			},
 		},
+	}
 
+	informerFactory := informers.NewSharedInformerFactory(client, controller.NoResyncPeriodFunc())
+	secretInformer := informerFactory.Core().V1().Secrets()
+	secretCredentialManager := &SecretCredentialManager{
+		SecretName:      secretName,
+		SecretNamespace: secretNamespace,
+		SecretLister:    secretInformer.Lister(),
+		Cache: &SecretCache{
+			VirtualCenter: make(map[string]*Credential),
+		},
 	}
 
 	for _, test := range tests {
