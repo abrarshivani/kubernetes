@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/apimachinery/pkg/labels"
 )
 
 func TestSecretCredentialManager_GetCredential(t *testing.T) {
@@ -81,6 +80,32 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 				},
 			},
 		},
+		{
+			testName: "Add secret and get credentials",
+			ops:      []string{addSecretOp, getCredentialsOp},
+			expectedValues: []interface{}{
+				OpSecretTest{
+					secret: defaultSecret,
+				},
+				GetCredentialsTest{
+					username: testUser,
+					password: testPassword,
+					server:   testServer,
+				},
+			},
+		},
+		{
+			testName: "Getcredentials should fail by not adding at secret at first time",
+			ops:      []string{getCredentialsOp},
+			expectedValues: []interface{}{
+				GetCredentialsTest{
+					username: testUser,
+					password: testPassword,
+					server:   testServer,
+					err:      ErrCredentialsNotFound,
+				},
+			},
+		},
 	}
 
 	informerFactory := informers.NewSharedInformerFactory(client, controller.NoResyncPeriodFunc())
@@ -93,9 +118,56 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 			VirtualCenter: make(map[string]*Credential),
 		},
 	}
+	cleanupSecretCredentialManager := func() {
+		secretCredentialManager.Cache.Secret = nil
+		for key := range secretCredentialManager.Cache.VirtualCenter {
+			delete(secretCredentialManager.Cache.VirtualCenter, key)
+		}
+		secrets, err := secretCredentialManager.SecretLister.List(labels.Everything())
+		if err != nil {
+			t.Fatal("Failed to get all secrets from sharedInformer. error: ", err)
+		}
+		for _, secret := range secrets {
+			secretInformer.Informer().GetIndexer().Delete(secret)
+		}
+	}
 
 	for _, test := range tests {
 		t.Logf("Executing Testcase: %s", test.testName)
+		for ntest, op := range test.ops {
+			switch(op) {
+			case addSecretOp:
+				expected := test.expectedValues[ntest].(OpSecretTest)
+				t.Logf("Adding secret: %s", expected.secret)
+				err := secretInformer.Informer().GetIndexer().Add(expected.secret)
+				if err != nil {
+					t.Fatalf("Failed to add secret to internal cache: %v", err)
+				}
+			case getCredentialsOp:
+				expected := test.expectedValues[ntest].(GetCredentialsTest)
+				credential, err := secretCredentialManager.GetCredential(expected.server)
+				t.Logf("Retrieving credentials for server %s", expected.server)
+				if err != expected.err {
+					t.Fatalf("Fail to get credentials with error: %s", err)
+				}
+				if expected.err == nil {
+					if expected.username != credential.User ||
+						expected.password != credential.Password {
+						t.Fatalf("Recieved credentials %v "+
+							"are diffrent than actual credential user:%s password:%s", credential, expected.username,
+							expected.password)
+					}
+				}
+			case deleteSecretOp:
+				expected := test.expectedValues[ntest].(OpSecretTest)
+				t.Logf("Deleting secret: %s", expected.secret)
+				err := secretInformer.Informer().GetIndexer().Delete(expected.secret)
+				if err != nil {
+					t.Fatalf("Failed to delete secret to internal cache: %v", err)
+				}
+			}
+		}
+		cleanupSecretCredentialManager()
 	}
 }
 
