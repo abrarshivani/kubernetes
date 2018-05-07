@@ -13,11 +13,14 @@ import (
 
 func TestSecretCredentialManager_GetCredential(t *testing.T) {
 	var (
-		userKey      = "username"
-		passwordKey  = "password"
-		testUser     = "user"
-		testPassword = "password"
-		testServer   = "0.0.0.0"
+		userKey             = "username"
+		passwordKey         = "password"
+		testUser            = "user"
+		testPassword        = "password"
+		testServer          = "0.0.0.0"
+		testServer2         = "0.0.1.1"
+		testUserServer2     = "user1"
+		testPasswordServer2 = "password1"
 		testIncorrectServer = "1.1.1.1"
 	)
 	var (
@@ -55,6 +58,16 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 		Data: map[string][]byte{
 			testServer + "." + userKey:     []byte(testUser),
 			testServer + "." + passwordKey: []byte(testPassword),
+		},
+	}
+
+	multiVCSecret := &corev1.Secret{
+		ObjectMeta: metaObj,
+		Data: map[string][]byte{
+			testServer + "." + userKey:      []byte(testUser),
+			testServer + "." + passwordKey:  []byte(testPassword),
+			testServer2 + "." + userKey:     []byte(testUserServer2),
+			testServer2 + "." + passwordKey: []byte(testPasswordServer2),
 		},
 	}
 
@@ -135,6 +148,20 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 				GetCredentialsTest{
 					server: testIncorrectServer,
 					err:    ErrCredentialsNotFound,
+				},
+			},
+		},
+		{
+			testName: "GetCredential for multi-vc",
+			ops:      []string{addSecretOp, getCredentialsOp},
+			expectedValues: []interface{}{
+				OpSecretTest{
+					secret: multiVCSecret,
+				},
+				GetCredentialsTest{
+					server:   testServer2,
+					username: testUserServer2,
+					password: testPasswordServer2,
 				},
 			},
 		},
