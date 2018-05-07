@@ -49,7 +49,7 @@ func (secretCredentialManager *SecretCredentialManager) GetCredential(server str
 	// Handle secret deletion
 	if err != nil {
 		statusErr, ok := err.(*apierrors.StatusError)
-		if ok && statusErr.ErrStatus.Code != http.StatusNotFound || !ok {
+		if (ok && statusErr.ErrStatus.Code != http.StatusNotFound) || !ok {
 			return nil, err
 		}
 		glog.Warningf("secret %q not found in namespace %q", secretCredentialManager.SecretName, secretCredentialManager.SecretNamespace)
@@ -117,6 +117,10 @@ func (cache *SecretCache) parseSecret() error {
 }
 
 func parseConfig(data map[string][]byte, config map[string]*Credential) error {
+	if len(data) == 0 {
+		return ErrCredentialMissing
+	}
+
 	for credentialKey, credentialValue := range data {
 		credentialKey = strings.ToLower(credentialKey)
 		vcServer := ""

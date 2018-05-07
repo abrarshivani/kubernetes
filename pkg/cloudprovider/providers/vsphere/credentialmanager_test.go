@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 func TestSecretCredentialManager_GetCredential(t *testing.T) {
@@ -57,6 +58,11 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 		},
 	}
 
+	emptySecret := &corev1.Secret{
+		ObjectMeta: metaObj,
+		Data:       map[string][]byte{},
+	}
+
 	tests := []testEnv{
 		{
 			testName: "Deleting secret should give the credentials from cache",
@@ -103,6 +109,19 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 					password: testPassword,
 					server:   testServer,
 					err:      ErrCredentialsNotFound,
+				},
+			},
+		},
+		{
+			testName: "GetCredential should fail to get credentials from empty secrets",
+			ops:      []string{addSecretOp, getCredentialsOp},
+			expectedValues: []interface{}{
+				OpSecretTest{
+					secret: emptySecret,
+				},
+				GetCredentialsTest{
+					server: testServer,
+					err:    ErrCredentialMissing,
 				},
 			},
 		},
