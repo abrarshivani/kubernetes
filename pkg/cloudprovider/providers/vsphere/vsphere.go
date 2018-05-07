@@ -442,7 +442,7 @@ func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 		glog.Errorf("Failed to get uuid. err: %+v", err)
 		return nil, err
 	}
-	runtime.SetFinalizer(&vs, logout)
+	runtime.SetFinalizer(vs, logout)
 	return vs, nil
 }
 
