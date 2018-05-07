@@ -18,7 +18,7 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 		testUser     = "user"
 		testPassword = "password"
 		testServer   = "0.0.0.0"
-		//testIncorrectServer = "1.1.1.1"
+		testIncorrectServer = "1.1.1.1"
 	)
 	var (
 		secretName      = "vsconf"
@@ -122,6 +122,19 @@ func TestSecretCredentialManager_GetCredential(t *testing.T) {
 				GetCredentialsTest{
 					server: testServer,
 					err:    ErrCredentialMissing,
+				},
+			},
+		},
+		{
+			testName: "GetCredential should fail to get credentials for invalid server",
+			ops:      []string{addSecretOp, getCredentialsOp},
+			expectedValues: []interface{}{
+				OpSecretTest{
+					secret: defaultSecret,
+				},
+				GetCredentialsTest{
+					server: testIncorrectServer,
+					err:    ErrCredentialsNotFound,
 				},
 			},
 		},
