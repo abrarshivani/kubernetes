@@ -789,10 +789,13 @@ func (vs *VSphere) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (
 			glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
 			return "", err
 		}
-		_, err = vm.IsActive(ctx)
+		isActive, err := vm.IsActive(ctx)
 		if err != nil {
 			glog.Errorf("Failed to check whether node %q is active. err: %+v.", convertToString(nodeName), err)
 			return "", err
+		}
+		if isActive {
+			return vs.vmUUID, nil
 		}
 		glog.Warningf("The VM: %s is not in %s state", convertToString(nodeName), vclib.ActivePowerState)
 		return "", cloudprovider.InstanceNotFound
