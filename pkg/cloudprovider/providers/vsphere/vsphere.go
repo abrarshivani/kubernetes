@@ -690,7 +690,70 @@ func (vs *VSphere) InstanceExistsByProviderID(ctx context.Context, providerID st
 
 // InstanceShutdownByProviderID returns true if the instance is in safe state to detach volumes
 func (vs *VSphere) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
-	return false, cloudprovider.NotImplemented
+	var nodeName string
+	nodes, err := vs.nodeManager.GetNodeDetails()
+	if err != nil {
+		glog.Errorf("Error while obtaining Kubernetes node nodeVmDetail details. error : %+v", err)
+		return false, err
+	}
+	for _, node := range nodes {
+		// ProviderID is UUID for nodes v1.9.3+
+		if node.VMUUID == GetUUIDFromProviderID(providerID) || node.NodeName == providerID {
+			nodeName = node.NodeName
+			break
+		}
+	}
+	if nodeName == "" {
+		msg := fmt.Sprintf("Error while obtaining Kubernetes nodename for providerID %s.", providerID)
+		return false, errors.New(msg)
+	}
+
+	instanceIDInternal := func() (bool, error) {
+
+		// Below logic can be performed only on master node where VC details are preset.
+		if vs.cfg == nil {
+			return false, fmt.Errorf("The current node can't detremine InstanceID for %q", convertToK8sType(nodeName))
+		}
+
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		vsi, err := vs.getVSphereInstance(convertToK8sType(nodeName))
+		if err != nil {
+			return false, err
+		}
+		// Ensure client is logged in and session is valid
+		err = vs.nodeManager.vcConnect(ctx, vsi)
+		if err != nil {
+			return false, err
+		}
+		vm, err := vs.getVMFromNodeName(ctx, convertToK8sType(nodeName))
+		if err != nil {
+			if err == vclib.ErrNoVMFound {
+				return false, cloudprovider.InstanceNotFound
+			}
+			glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToK8sType(nodeName), err)
+			return false, err
+		}
+		isActive, err := vm.IsActive(ctx)
+		return !isActive, err
+	}
+
+	instanceID, err := instanceIDInternal()
+	if err != nil {
+		var isManagedObjectNotFoundError bool
+		isManagedObjectNotFoundError, err = vs.retry(convertToK8sType(nodeName), err)
+		if isManagedObjectNotFoundError {
+			if err == nil {
+				glog.V(4).Infof("InstanceID: Found node %q", nodeName)
+				instanceID, err = instanceIDInternal()
+			} else if err == vclib.ErrNoVMFound {
+				return false, err
+			}
+		}
+	}
+
+	return instanceID, err
 }
 
 // InstanceID returns the cloud provider ID of the node with the specified Name.
@@ -726,13 +789,10 @@ func (vs *VSphere) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (
 			glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
 			return "", err
 		}
-		isActive, err := vm.IsActive(ctx)
+		_, err = vm.IsActive(ctx)
 		if err != nil {
 			glog.Errorf("Failed to check whether node %q is active. err: %+v.", convertToString(nodeName), err)
 			return "", err
-		}
-		if isActive {
-			return vs.vmUUID, nil
 		}
 		glog.Warningf("The VM: %s is not in %s state", convertToString(nodeName), vclib.ActivePowerState)
 		return "", cloudprovider.InstanceNotFound
