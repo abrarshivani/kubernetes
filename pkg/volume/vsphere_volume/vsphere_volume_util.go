@@ -182,14 +182,19 @@ func getVolPathfromVolumeName(deviceMountPath string) string {
 	return strings.Replace(volPath, "\\040", " ", -1)
 }
 
-func getCloudProvider(cloud cloudprovider.Interface) (*vsphere.VSphere, error) {
+func getCloudProvider(cloud cloudprovider.Interface) (vsphere.Volumes, error) {
+	var vs vsphere.Volumes
 	if cloud == nil {
 		glog.Errorf("Cloud provider not initialized properly")
 		return nil, errors.New("Cloud provider not initialized properly")
 	}
 
-	vs, ok := cloud.(*vsphere.VSphere)
-	if !ok || vs == nil {
+	switch cloud.(type) {
+	case *vsphere.VSphere:
+		vs = cloud.(*vsphere.VSphere)
+	case *vsphere.CSP:
+		vs = cloud.(*vsphere.CSP)
+	default:
 		return nil, errors.New("Invalid cloud provider: expected vSphere")
 	}
 	return vs, nil

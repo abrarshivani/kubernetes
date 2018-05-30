@@ -226,9 +226,14 @@ func TestVSphereLogin(t *testing.T) {
 	defer cleanup()
 
 	// Create vSphere configuration object
-	vs, err := newControllerNode(cfg)
+	cloud, err := newControllerNode(cfg)
 	if err != nil {
 		t.Fatalf("Failed to construct/authenticate vSphere: %s", err)
+	}
+
+	vs, ok := GetVSphereCloud(cloud)
+	if !ok {
+		t.Fatalf("Failed to vSphere cloud implementation: %s", err)
 	}
 
 	// Create context
@@ -256,10 +261,14 @@ func TestVSphereLoginByToken(t *testing.T) {
 	cfg.Global.User = localhostCert
 	cfg.Global.Password = localhostKey
 
-	// Create vSphere configuration object
-	vs, err := newControllerNode(cfg)
+	cloud, err := newControllerNode(cfg)
 	if err != nil {
 		t.Fatalf("Failed to construct/authenticate vSphere: %s", err)
+	}
+
+	vs, ok := GetVSphereCloud(cloud)
+	if !ok {
+		t.Fatalf("Failed to vSphere cloud implementation: %s", err)
 	}
 
 	ctx := context.Background()
@@ -304,9 +313,14 @@ func TestVSphereLoginWithCaCert(t *testing.T) {
 	cfg.Global.CAFile = fixtures.CaCertPath
 
 	// Create vSphere configuration object
-	vs, err := newControllerNode(cfg)
+	cloud, err := newControllerNode(cfg)
 	if err != nil {
 		t.Fatalf("Failed to construct/authenticate vSphere: %s", err)
+	}
+
+	vs, ok := GetVSphereCloud(cloud)
+	if !ok {
+		t.Fatalf("Failed to vSphere cloud implementation: %s", err)
 	}
 
 	ctx := context.Background()
@@ -340,9 +354,14 @@ func TestZones(t *testing.T) {
 	defer cleanup()
 
 	// Create vSphere configuration object
-	vs, err := newControllerNode(cfg)
+	cloud, err := newControllerNode(cfg)
 	if err != nil {
 		t.Fatalf("Failed to construct/authenticate vSphere: %s", err)
+	}
+
+	vs, ok := GetVSphereCloud(cloud)
+	if !ok {
+		t.Fatalf("Failed to vSphere cloud implementation: %s", err)
 	}
 
 	// Configure region and zone categories
@@ -493,9 +512,14 @@ func TestInstances(t *testing.T) {
 		t.Skipf("No config found in environment")
 	}
 
-	vs, err := newControllerNode(cfg)
+	cloud, err := newControllerNode(cfg)
 	if err != nil {
 		t.Fatalf("Failed to construct/authenticate vSphere: %s", err)
+	}
+
+	vs, ok := GetVSphereCloud(cloud)
+	if !ok {
+		t.Fatalf("Failed to vSphere cloud implementation: %s", err)
 	}
 
 	i, ok := vs.Instances()
@@ -546,9 +570,14 @@ func TestVolumes(t *testing.T) {
 		t.Skipf("No config found in environment")
 	}
 
-	vs, err := newControllerNode(cfg)
+	cloud, err := newControllerNode(cfg)
 	if err != nil {
 		t.Fatalf("Failed to construct/authenticate vSphere: %s", err)
+	}
+
+	vs, ok := GetVSphereCloud(cloud)
+	if !ok {
+		t.Fatalf("Failed to vSphere cloud implementation: %s", err)
 	}
 
 	nodeName, err := vs.CurrentNodeName(context.TODO(), "")
@@ -585,7 +614,6 @@ func TestVolumes(t *testing.T) {
 }
 
 func TestSecretVSphereConfig(t *testing.T) {
-	var vs *VSphere
 	var (
 		username = "user"
 		password = "password"
@@ -838,12 +866,16 @@ func TestSecretVSphereConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Should succeed when a valid config is provided: %s", err)
 		}
-		vs, err = buildVSphereFromConfig(cfg)
+		cloud, err := buildVSphereFromConfig(cfg)
 		if err != testcase.expectedError {
 			t.Fatalf("Should succeed when a valid config is provided: %s", err)
 		}
 		if err != nil {
 			continue
+		}
+		vs, ok := GetVSphereCloud(cloud)
+		if !ok {
+			t.Fatalf("Failed to vSphere cloud implementation: %s", err)
 		}
 		if vs.isSecretInfoProvided != testcase.expectedIsSecretProvided {
 			t.Fatalf("SecretName and SecretNamespace was expected in config %s. error: %s",

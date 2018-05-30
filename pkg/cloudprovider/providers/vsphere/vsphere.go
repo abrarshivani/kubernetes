@@ -26,7 +26,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -79,14 +78,8 @@ var (
 
 // VSphere is an implementation of cloud provider Interface for VSphere.
 type VSphere struct {
-	cfg      *VSphereConfig
-	hostName string
-	// Maps the VSphere IP address to VSphereInstance
-	vsphereInstanceMap map[string]*VSphereInstance
-	// Responsible for managing discovery of k8s node, their location etc.
-	nodeManager          *NodeManager
-	vmUUID               string
-	isSecretInfoProvided bool
+	*VCP
+	nodeManager *NodeManager
 }
 
 // Represents a vSphere instance where one or more kubernetes nodes are running.
@@ -159,6 +152,7 @@ type VSphereConfig struct {
 		SecretName string `gcfg:"secret-name"`
 		// Secret Namespace where secret will be present that has vCenter credentials.
 		SecretNamespace string `gcfg:"secret-namespace"`
+		CNS             bool   `gcfg:"cns"`
 	}
 
 	VirtualCenter map[string]*VirtualCenterConfig
@@ -278,18 +272,18 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 // Creates new worker node interface and returns
 func newWorkerNode() (*VSphere, error) {
 	var err error
-	vs := VSphere{}
-	vs.hostName, err = os.Hostname()
+	vcp := VCP{}
+	vcp.hostName, err = os.Hostname()
 	if err != nil {
 		glog.Errorf("Failed to get hostname. err: %+v", err)
 		return nil, err
 	}
-	vs.vmUUID, err = GetVMUUID()
+	vcp.vmUUID, err = GetVMUUID()
 	if err != nil {
 		glog.Errorf("Failed to get uuid. err: %+v", err)
 		return nil, err
 	}
-	return &vs, nil
+	return &VSphere{VCP: &vcp}, nil
 }
 
 func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance, error) {
@@ -455,31 +449,36 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 var getVMUUID = GetVMUUID
 
 // Creates new Controller node interface and returns
-func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
-	vs, err := buildVSphereFromConfig(cfg)
+func newControllerNode(cfg VSphereConfig) (cloudprovider.Interface, error) {
+	cloud, err := buildVSphereFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
-	vs.hostName, err = os.Hostname()
+	vcp, err := GetVCP(cloud)
+	if err != nil {
+		return nil, err
+	}
+	vcp.hostName, err = os.Hostname()
 	if err != nil {
 		glog.Errorf("Failed to get hostname. err: %+v", err)
 		return nil, err
 	}
 	if cfg.Global.VMUUID != "" {
-		vs.vmUUID = cfg.Global.VMUUID
+		vcp.vmUUID = cfg.Global.VMUUID
 	} else {
-		vs.vmUUID, err = getVMUUID()
+		vcp.vmUUID, err = getVMUUID()
 		if err != nil {
 			glog.Errorf("Failed to get uuid. err: %+v", err)
 			return nil, err
 		}
 	}
-	runtime.SetFinalizer(vs, logout)
-	return vs, nil
+	//runtime.SetFinalizer(vcp, logout)
+	return cloud, nil
 }
 
 // Initializes vSphere from vSphere CloudProvider Configuration
-func buildVSphereFromConfig(cfg VSphereConfig) (*VSphere, error) {
+func buildVSphereFromConfig(cfg VSphereConfig) (cloudprovider.Interface, error) {
+	var cloud cloudprovider.Interface
 	isSecretInfoProvided := false
 	if cfg.Global.SecretName != "" && cfg.Global.SecretNamespace != "" {
 		isSecretInfoProvided = true
@@ -505,20 +504,32 @@ func buildVSphereFromConfig(cfg VSphereConfig) (*VSphere, error) {
 		return nil, err
 	}
 
-	vs := VSphere{
-		vsphereInstanceMap: vsphereInstanceMap,
+	vcp := &VCP{
+		vsphereInstanceMap:   vsphereInstanceMap,
+		isSecretInfoProvided: isSecretInfoProvided,
+		cfg:                  &cfg,
+	}
+
+	cloud = &VSphere{
+		VCP: vcp,
 		nodeManager: &NodeManager{
 			vsphereInstanceMap: vsphereInstanceMap,
 			nodeInfoMap:        make(map[string]*NodeInfo),
 			registeredNodes:    make(map[string]*v1.Node),
 		},
-		isSecretInfoProvided: isSecretInfoProvided,
-		cfg:                  &cfg,
 	}
-	return &vs, nil
+
+	if cfg.Global.CNS {
+		if len(vsphereInstanceMap) > 1 {
+			return nil, errors.New("Multiple vCenters is not supported by cns")
+		}
+		cloud = &CSP{vcp}
+	}
+
+	return cloud, nil
 }
 
-func logout(vs *VSphere) {
+func logout(vs *VCP) {
 	for _, vsphereIns := range vs.vsphereInstanceMap {
 		vsphereIns.conn.Logout(context.TODO())
 	}
@@ -670,11 +681,6 @@ func (vs *VSphere) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName
 // and other local methods cannot be used here
 func (vs *VSphere) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
 	return vs.NodeAddresses(ctx, convertToK8sType(providerID))
-}
-
-// AddSSHKeyToAllInstances add SSH key to all instances
-func (vs *VSphere) AddSSHKeyToAllInstances(ctx context.Context, user string, keyData []byte) error {
-	return cloudprovider.NotImplemented
 }
 
 // CurrentNodeName gives the current node name

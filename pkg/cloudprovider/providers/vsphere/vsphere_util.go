@@ -56,8 +56,12 @@ func GetVSphere() (*VSphere, error) {
 	if err != nil {
 		return nil, err
 	}
-	vs, err := newControllerNode(*cfg)
+	cloud, err := newControllerNode(*cfg)
 	if err != nil {
+		return nil, err
+	}
+	vs, ok := GetVSphereCloud(cloud)
+	if !ok {
 		return nil, err
 	}
 	return vs, nil
