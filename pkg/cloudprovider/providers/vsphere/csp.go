@@ -3,16 +3,22 @@ package vsphere
 import (
 	"context"
 	"github.com/golang/glog"
+	nodemanager "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
+	cspvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	"strconv"
+	"strings"
 )
 
 type CSP struct {
 	*VCP
+	virtualCenterManager cspvsphere.VirtualCenterManager
+	nodeManager          nodemanager.Manager
 }
 
 var _ cloudprovider.Interface = &CSP{}
@@ -58,6 +64,7 @@ func (csp *CSP) NodeAdded(obj interface{}) {
 	}
 
 	glog.V(4).Infof("Node added: %+v", node)
+	csp.nodeManager.RegisterNode(node.Name, nil)
 }
 
 // Notification handler when node is removed from k8s cluster.
@@ -69,6 +76,7 @@ func (csp *CSP) NodeDeleted(obj interface{}) {
 	}
 
 	glog.V(4).Infof("Node deleted: %+v", node)
+	csp.nodeManager.UnregisterNode(node.Name)
 }
 
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
@@ -138,5 +146,32 @@ func (csp *CSP) NodeAddressesByProviderID(ctx context.Context, providerID string
 
 // CurrentNodeName gives the current node name
 func (csp *CSP) CurrentNodeName(ctx context.Context, hostname string) (k8stypes.NodeName, error) {
-	return convertToK8sType(csp.hostName), nil
+	return convertToK8sType(csp.vmUUID), nil
+}
+
+func RegisterVirtualCenters(vsphereInstanceMap map[string]*VSphereInstance,
+	virtualCenterManager cspvsphere.VirtualCenterManager) error {
+	for _, vsi := range vsphereInstanceMap {
+		datacenters := strings.Split(vsi.cfg.Datacenters, ",")
+		for dci, dc := range datacenters {
+			dc = strings.TrimSpace(dc)
+			datacenters[dci] = dc
+		}
+		port, err := strconv.Atoi(vsi.conn.Port)
+		if err != nil {
+			return err
+		}
+		roundTripCount := int(vsi.conn.RoundTripperCount)
+
+		virtualCenterManager.RegisterVirtualCenter(&cspvsphere.VirtualCenterConfig{
+			Host:              vsi.conn.Hostname,
+			Port:              port,
+			Username:          vsi.conn.Username,
+			Password:          vsi.conn.Password,
+			RoundTripperCount: roundTripCount,
+			DatacenterPaths:   datacenters,
+			Insecure:          vsi.conn.Insecure,
+		})
+	}
+	return nil
 }

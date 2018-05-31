@@ -368,6 +368,8 @@ filegroup(
         "//vendor/github.com/vmware/photon-controller-go-sdk/photon:all-srcs",
         "//vendor/github.com/xanzy/go-cloudstack/cloudstack:all-srcs",
         "//vendor/github.com/xiang90/probing:all-srcs",
+        "//vendor/gitlab.eng.vmware.com/hatchway/common-csp/pkg/node:all-srcs",
+        "//vendor/gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere:all-srcs",
         "//vendor/golang.org/x/crypto/bcrypt:all-srcs",
         "//vendor/golang.org/x/crypto/blowfish:all-srcs",
         "//vendor/golang.org/x/crypto/cryptobyte:all-srcs",

@@ -36,6 +36,8 @@ import (
 	"github.com/vmware/govmomi/vapi/rest"
 	"github.com/vmware/govmomi/vapi/tags"
 	"github.com/vmware/govmomi/vim25/mo"
+	nodemanager "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
+	cspvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
@@ -524,7 +526,13 @@ func buildVSphereFromConfig(cfg VSphereConfig) (cloudprovider.Interface, error) 
 		if len(vsphereInstanceMap) > 1 {
 			return nil, errors.New("Multiple vCenters is not supported by cns")
 		}
-		cloud = &CSP{vcp}
+		csp := &CSP{
+			VCP:                  vcp,
+			nodeManager:          nodemanager.GetManager(),
+			virtualCenterManager: cspvsphere.GetVirtualCenterManager(),
+		}
+		RegisterVirtualCenters(vsphereInstanceMap, csp.virtualCenterManager)
+		cloud = csp
 	}
 
 	return cloud, nil

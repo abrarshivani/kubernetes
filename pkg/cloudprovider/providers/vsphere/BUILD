@@ -35,6 +35,8 @@ go_library(
         "//vendor/github.com/vmware/govmomi/vapi/tags:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25/mo:go_default_library",
+        "//vendor/gitlab.eng.vmware.com/hatchway/common-csp/pkg/node:go_default_library",
+        "//vendor/gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere:go_default_library",
         "//vendor/gopkg.in/gcfg.v1:go_default_library",
     ],
 )
