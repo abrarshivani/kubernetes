@@ -54,6 +54,8 @@ const (
 	VolDir                        = "kubevols"
 	RoundTripperDefaultCount      = 3
 	DummyVMPrefixName             = "vsphere-k8s"
+	UUIDConfigMapName             = "vsphere-vm-uuid"
+	UUIDConfigMapNameSpace        = "kube-system"
 	MacOuiVC                      = "00:50:56"
 	MacOuiEsx                     = "00:0c:29"
 	CleanUpDummyVMRoutineInterval = 5
@@ -87,6 +89,7 @@ type VSphere struct {
 	nodeManager          *NodeManager
 	vmUUID               string
 	isSecretInfoProvided bool
+	informerFactory      informers.SharedInformerFactory
 }
 
 // Represents a vSphere instance where one or more kubernetes nodes are running.
@@ -243,6 +246,19 @@ func init() {
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) {
+	vs.NodeManager().kubeClient = clientBuilder.ClientOrDie("vsphere-cloud-provider")
+
+	// Only on controller node it is required to register listeners.
+	// Register callbacks for node updates
+	// EventHandler needs to be added once kubeClient is provided to nodemanager
+	if vs.informerFactory != nil {
+		glog.V(4).Infof("Setting up node informers for vSphere Cloud Provider")
+		vs.informerFactory.Core().V1().Nodes().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    vs.NodeAdded,
+			DeleteFunc: vs.NodeDeleted,
+		})
+		glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
+	}
 }
 
 // Initialize Node Informers
@@ -263,16 +279,7 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 		vs.nodeManager.UpdateCredentialManager(secretCredentialManager)
 	}
 
-	// Only on controller node it is required to register listeners.
-	// Register callbacks for node updates
-	glog.V(4).Infof("Setting up node informers for vSphere Cloud Provider")
-	nodeInformer := informerFactory.Core().V1().Nodes().Informer()
-	nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    vs.NodeAdded,
-		DeleteFunc: vs.NodeDeleted,
-	})
-	glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
-
+	vs.informerFactory = informerFactory
 }
 
 // Creates new worker node interface and returns
@@ -508,9 +515,12 @@ func buildVSphereFromConfig(cfg VSphereConfig) (*VSphere, error) {
 	vs := VSphere{
 		vsphereInstanceMap: vsphereInstanceMap,
 		nodeManager: &NodeManager{
-			vsphereInstanceMap: vsphereInstanceMap,
-			nodeInfoMap:        make(map[string]*NodeInfo),
-			registeredNodes:    make(map[string]*v1.Node),
+			vsphereInstanceMap:       vsphereInstanceMap,
+			nodeInfoMap:              make(map[string]*NodeInfo),
+			registeredNodes:          make(map[string]*v1.Node),
+			vmUUIDConfigMapName:      UUIDConfigMapName,
+			vmUUIDConfigMapNamespace: UUIDConfigMapNameSpace,
+			vmUUIDConfigMapCache:     make(map[string]string),
 		},
 		isSecretInfoProvided: isSecretInfoProvided,
 		cfg:                  &cfg,
@@ -780,7 +790,7 @@ func (vs *VSphere) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (
 	instanceID, err := instanceIDInternal()
 	if err != nil {
 		if vclib.IsManagedObjectNotFoundError(err) {
-			err = vs.nodeManager.RediscoverNode(nodeName)
+			err = vs.nodeManager.DiscoverNode(convertToString(nodeName))
 			if err == nil {
 				glog.V(4).Infof("InstanceID: Found node %q", convertToString(nodeName))
 				instanceID, err = instanceIDInternal()
@@ -868,7 +878,7 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyName string, nodeN
 	diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyName, nodeName)
 	if err != nil {
 		if vclib.IsManagedObjectNotFoundError(err) {
-			err = vs.nodeManager.RediscoverNode(nodeName)
+			err = vs.nodeManager.DiscoverNode(convertToString(nodeName))
 			if err == nil {
 				glog.V(4).Infof("AttachDisk: Found node %q", convertToString(nodeName))
 				diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyName, nodeName)
@@ -879,6 +889,18 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyName string, nodeN
 	glog.V(4).Infof("AttachDisk executed for node %s and volume %s with diskUUID %s. Err: %s", convertToString(nodeName), vmDiskPath, diskUUID, err)
 	vclib.RecordvSphereMetric(vclib.OperationAttachVolume, requestTime, err)
 	return diskUUID, err
+}
+
+func (vs *VSphere) retry(nodeName k8stypes.NodeName, err error) (bool, error) {
+	isManagedObjectNotFoundError := false
+	if err != nil {
+		if vclib.IsManagedObjectNotFoundError(err) {
+			isManagedObjectNotFoundError = true
+			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
+			err = vs.nodeManager.DiscoverNode(convertToString(nodeName))
+		}
+	}
+	return isManagedObjectNotFoundError, err
 }
 
 // DetachDisk detaches given virtual disk volume from the compute running kubelet.
@@ -926,7 +948,7 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 	err := detachDiskInternal(volPath, nodeName)
 	if err != nil {
 		if vclib.IsManagedObjectNotFoundError(err) {
-			err = vs.nodeManager.RediscoverNode(nodeName)
+			err = vs.nodeManager.DiscoverNode(convertToString(nodeName))
 			if err == nil {
 				err = detachDiskInternal(volPath, nodeName)
 			}
@@ -983,7 +1005,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 	isAttached, err := diskIsAttachedInternal(volPath, nodeName)
 	if err != nil {
 		if vclib.IsManagedObjectNotFoundError(err) {
-			err = vs.nodeManager.RediscoverNode(nodeName)
+			err = vs.nodeManager.DiscoverNode(convertToString(nodeName))
 			if err == vclib.ErrNoVMFound {
 				isAttached, err = false, nil
 			} else if err == nil {
@@ -1092,7 +1114,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			// Rediscover nodes which are need to be retried
 			remainingNodesVolumes := make(map[k8stypes.NodeName][]string)
 			for _, nodeName := range nodesToRetry {
-				err = vs.nodeManager.RediscoverNode(nodeName)
+				err = vs.nodeManager.DiscoverNode(convertToString(nodeName))
 				if err != nil {
 					if err == vclib.ErrNoVMFound {
 						glog.V(4).Infof("node %s not found. err: %+v", nodeName, err)
