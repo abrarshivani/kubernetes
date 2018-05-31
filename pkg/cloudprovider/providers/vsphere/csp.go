@@ -13,6 +13,7 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"strconv"
 	"strings"
+	"fmt"
 )
 
 type CSP struct {
@@ -127,7 +128,41 @@ func (csp *CSP) InstanceExistsByProviderID(ctx context.Context, providerID strin
 
 // InstanceID returns the cloud provider ID of the node with the specified Name.
 func (csp *CSP) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (string, error) {
-	return "", nil
+	instanceIDInternal := func() (string, error) {
+		if csp.vmUUID == convertToString(nodeName) {
+			return csp.vmUUID, nil
+		}
+
+		// Below logic can be performed only on master node where VC details are preset.
+		if csp.cfg == nil {
+			return "", fmt.Errorf("The current node can't detremine InstanceID for %q", convertToString(nodeName))
+		}
+
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		vm, err := csp.nodeManager.GetNode(convertToString(nodeName))
+		if err != nil {
+			if err == cspvsphere.ErrVMNotFound {
+				return "", cloudprovider.InstanceNotFound
+			}
+			glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
+			return "", err
+		}
+
+		isActive, err := vm.IsActive(ctx)
+		if err != nil {
+			glog.Errorf("Failed to check whether node %q is active. err: %+v.", convertToString(nodeName), err)
+			return "", err
+		}
+		if isActive {
+			return csp.vmUUID, nil
+		}
+		glog.Warningf("The VM: %s is not in %s state", convertToString(nodeName), vclib.ActivePowerState)
+		return "", cloudprovider.InstanceNotFound
+	}
+	instanceID, err := instanceIDInternal()
+	return instanceID, err
 }
 
 func (csp *CSP) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName) ([]v1.NodeAddress, error) {
