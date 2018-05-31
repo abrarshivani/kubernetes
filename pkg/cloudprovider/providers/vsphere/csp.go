@@ -19,6 +19,20 @@ var _ cloudprovider.Interface = &CSP{}
 var _ cloudprovider.Instances = &CSP{}
 var _ Volumes = &CSP{}
 
+type CSPID struct {
+	clusterType string
+	vcUserName  string
+	clusterID   string
+}
+
+func (csp *CSP) GetCSPID(server string) *CSPID {
+	return &CSPID{
+		clusterType: "KUBERNETES",
+		vcUserName:  csp.vsphereInstanceMap[server].conn.Username,
+		clusterID:   csp.cfg.Global.ClusterID,
+	}
+}
+
 func (csp *CSP) SetInformers(informerFactory informers.SharedInformerFactory) {
 	if csp.cfg == nil {
 		return
@@ -80,6 +94,8 @@ func (csp *CSP) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (ma
 
 // CreateVolume creates a new vmdk with specified parameters.
 func (csp *CSP) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath string, err error) {
+	cspID := csp.GetCSPID(csp.cfg.Workspace.VCenterIP)
+	glog.V(4).Infof("cspID: %+v", cspID)
 	return "", nil
 }
 

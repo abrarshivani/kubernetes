@@ -153,6 +153,7 @@ type VSphereConfig struct {
 		// Secret Namespace where secret will be present that has vCenter credentials.
 		SecretNamespace string `gcfg:"secret-namespace"`
 		CNS             bool   `gcfg:"cns"`
+		ClusterID       string `gcfg:"cluster-id"`
 	}
 
 	VirtualCenter map[string]*VirtualCenterConfig
