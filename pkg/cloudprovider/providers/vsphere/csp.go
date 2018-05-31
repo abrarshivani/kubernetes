@@ -2,6 +2,7 @@ package vsphere
 
 import (
 	"context"
+	"fmt"
 	"github.com/golang/glog"
 	nodemanager "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
 	cspvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
@@ -9,11 +10,12 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
+	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	"net"
 	"strconv"
 	"strings"
-	"fmt"
 )
 
 type CSP struct {
@@ -166,7 +168,49 @@ func (csp *CSP) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (str
 }
 
 func (csp *CSP) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName) ([]v1.NodeAddress, error) {
-	return nil, nil
+	// Get local IP addresses if node is local node
+	if csp.vmUUID == convertToString(nodeName) {
+		return getLocalIP()
+	}
+
+	if csp.cfg == nil {
+		return nil, cloudprovider.InstanceNotFound
+	}
+
+	vm, err := csp.nodeManager.GetNode(convertToString(nodeName))
+	if err != nil {
+		glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
+		return nil, err
+	}
+
+	vmMoList, err := vm.Datacenter.GetVMMoList(ctx, []*cspvsphere.VirtualMachine{vm}, []string{"guest.net"})
+	if err != nil {
+		glog.Errorf("Failed to get VM Managed object with property guest.net for node: %q. err: +%v", convertToString(nodeName), err)
+		return nil, err
+	}
+
+	// Below logic can be executed only on master as VC details are present.
+	addrs := []v1.NodeAddress{}
+
+	// retrieve VM's ip(s)
+	for _, v := range vmMoList[0].Guest.Net {
+		if csp.cfg.Network.PublicNetwork == v.Network {
+			for _, ip := range v.IpAddress {
+				if net.ParseIP(ip).To4() != nil {
+					v1helper.AddToNodeAddresses(&addrs,
+						v1.NodeAddress{
+							Type:    v1.NodeExternalIP,
+							Address: ip,
+						}, v1.NodeAddress{
+							Type:    v1.NodeInternalIP,
+							Address: ip,
+						},
+					)
+				}
+			}
+		}
+	}
+	return addrs, nil
 }
 
 // NodeAddressesByProviderID returns the node addresses of an instances with the specified unique providerID
