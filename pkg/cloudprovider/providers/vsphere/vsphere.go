@@ -273,7 +273,7 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 }
 
 // Creates new worker node interface and returns
-func newWorkerNode() (*VSphere, error) {
+func newWorkerNode() (cloudprovider.Interface, error) {
 	var err error
 	vcp := VCP{}
 	vcp.hostName, err = os.Hostname()
@@ -286,7 +286,7 @@ func newWorkerNode() (*VSphere, error) {
 		glog.Errorf("Failed to get uuid. err: %+v", err)
 		return nil, err
 	}
-	return &VSphere{VCP: &vcp}, nil
+	return &CSP{VCP: &vcp}, nil
 }
 
 func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance, error) {
