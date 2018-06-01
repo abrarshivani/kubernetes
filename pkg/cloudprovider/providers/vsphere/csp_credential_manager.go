@@ -7,14 +7,16 @@ type CSPSecretCredentialManager struct {
 	*SecretCredentialManager
 }
 
-func (secretCredentialManager *CSPSecretCredentialManager) GetCredentials(server string) (*cspvsphere.Credential, error) {
+var _ cspvsphere.CredentialStore = &CSPSecretCredentialManager{}
+
+func (secretCredentialManager *CSPSecretCredentialManager) GetCredential(server string) (*cspvsphere.Credential, error) {
 	credentenal, err := secretCredentialManager.SecretCredentialManager.GetCredential(server)
 	if err != nil {
 		return nil, err
 	}
-	csp_credentials := &cspvsphere.Credential{
+	cspCredentials := &cspvsphere.Credential{
 		User: credentenal.User,
 		Password: credentenal.Password,
 	}
-	return csp_credentials, nil
+	return cspCredentials, nil
 }

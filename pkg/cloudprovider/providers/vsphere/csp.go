@@ -47,6 +47,19 @@ func (csp *CSP) SetInformers(informerFactory informers.SharedInformerFactory) {
 		return
 	}
 
+	if csp.isSecretInfoProvided {
+		secretCredentialManager := &SecretCredentialManager{
+			SecretName:      csp.cfg.Global.SecretName,
+			SecretNamespace: csp.cfg.Global.SecretNamespace,
+			SecretLister:    informerFactory.Core().V1().Secrets().Lister(),
+			Cache: &SecretCache{
+				VirtualCenter: make(map[string]*Credential),
+			},
+		}
+		cspSecretCredentialManager := &CSPSecretCredentialManager{SecretCredentialManager: secretCredentialManager}
+		cspvsphere.GetCredentialManager().SetCredentialStore(cspSecretCredentialManager)
+	}
+
 	// Only on controller node it is required to register listeners.
 	// Register callbacks for node updates
 	glog.V(4).Infof("Setting up node informers for vSphere Cloud Provider")
