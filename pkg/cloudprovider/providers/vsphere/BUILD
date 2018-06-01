@@ -11,6 +11,7 @@ go_library(
     srcs = [
         "credentialmanager.go",
         "csp.go",
+        "csp_credential_manager.go",
         "nodemanager.go",
         "vcp.go",
         "vsphere.go",

@@ -43,7 +43,8 @@ type VirtualCenter struct {
 	// Client represents the govmomi client instance for the connection.
 	Client *govmomi.Client
 	// PbmClient represents the govmomi PBM Client instance.
-	PbmClient *pbm.Client
+	PbmClient       *pbm.Client
+	credentialsLock sync.Mutex
 }
 
 func (vc *VirtualCenter) String() string {
@@ -92,7 +93,9 @@ func (vc *VirtualCenter) newClient(ctx context.Context) (*govmomi.Client, error)
 		log.WithFields(log.Fields{"url": url, "err": err}).Error("Failed to parse URL")
 		return nil, err
 	}
+	vc.credentialsLock.Lock()
 	url.User = neturl.UserPassword(vc.Config.Username, vc.Config.Password)
+	vc.credentialsLock.Unlock()
 
 	client, err := govmomi.NewClient(ctx, url, vc.Config.Insecure)
 	if err != nil {
@@ -107,8 +110,35 @@ func (vc *VirtualCenter) newClient(ctx context.Context) (*govmomi.Client, error)
 	return client, nil
 }
 
-// Connect creates a connection to the virtual center host.
+// Connect establishes connection with vSphere with existing credentials if session doesn't exist.
+// If credentials are invalid then it fetches latest credential from credential store and connects with it.
 func (vc *VirtualCenter) Connect(ctx context.Context) error {
+	err := vc.connect(ctx)
+	if err == nil {
+		return nil
+	}
+	if !IsInvalidCredentialsError(err) {
+		log.Errorf("Cannot connect to vCenter with err: %v", err)
+		return err
+	}
+	log.Infof("Invalid credentials. Cannot connect to server %q. "+
+		"Fetching credentials from secrets.", vc.Config.Host)
+	store, err := GetCredentialManager().GetCredentialStore()
+	if err != nil {
+		log.Errorf("Cannot get credential store with err: %v", err)
+		return err
+	}
+	credential, err := store.GetCredential(vc.Config.Host)
+	if err != nil {
+		log.Errorf("Cannot get credentials from credential store with err: %v", err)
+		return err
+	}
+	vc.UpdateCredentials(credential.User, credential.Password)
+	return vc.Connect(ctx)
+}
+
+// connect creates a connection to the virtual center host.
+func (vc *VirtualCenter) connect(ctx context.Context) error {
 	clientMutex.Lock()
 	defer clientMutex.Unlock()
 
@@ -201,4 +231,11 @@ func (vc *VirtualCenter) Disconnect(ctx context.Context) error {
 	}
 	vc.Client = nil
 	return nil
+}
+
+func (vc *VirtualCenter) UpdateCredentials(username, password string) {
+	vc.credentialsLock.Lock()
+	defer vc.credentialsLock.Unlock()
+	vc.Config.Username = username
+	vc.Config.Password = password
 }

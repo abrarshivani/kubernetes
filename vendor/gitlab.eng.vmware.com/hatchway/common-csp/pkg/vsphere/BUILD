@@ -3,9 +3,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
+        "credentialmanager.go",
         "datacenter.go",
         "datastore.go",
         "pbm.go",
+        "utils.go",
         "virtualcenter.go",
         "virtualcentermanager.go",
         "virtualmachine.go",
@@ -25,6 +27,7 @@ go_library(
         "//vendor/github.com/vmware/govmomi/vim25:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25/methods:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25/mo:go_default_library",
+        "//vendor/github.com/vmware/govmomi/vim25/soap:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25/types:go_default_library",
     ],
 )
