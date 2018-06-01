@@ -120,6 +120,9 @@ func (csp *CSP) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (ma
 func (csp *CSP) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath string, err error) {
 	cspID := csp.GetCSPID(csp.cfg.Workspace.VCenterIP)
 	glog.V(4).Infof("cspID: %+v", cspID)
+	// To test secrets
+	glog.V(4).Infof("Discovering Nodes", cspID)
+	csp.nodeManager.DiscoverNode(csp.vmUUID)
 	return "", nil
 }
 

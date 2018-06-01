@@ -3264,11 +3264,11 @@
 		},
 		{
 			"ImportPath": "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node",
-			"Rev": "58a689f018a3ff8c5c108942bea41dc6d30008aa"
+			"Rev": "6ea6f79a832093930dbcca19c1199bdbdcc8fce3"
 		},
 		{
 			"ImportPath": "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere",
-			"Rev": "58a689f018a3ff8c5c108942bea41dc6d30008aa"
+			"Rev": "6ea6f79a832093930dbcca19c1199bdbdcc8fce3"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/bcrypt",

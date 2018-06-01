@@ -63,11 +63,11 @@ type defaultCredentialManager struct {
 	credentialStore CredentialStore
 }
 
-func (m defaultCredentialManager) SetCredentialStore(credentialStore CredentialStore) {
+func (m *defaultCredentialManager) SetCredentialStore(credentialStore CredentialStore) {
 	m.credentialStore = credentialStore
 }
 
-func (m defaultCredentialManager) GetCredentialStore() (CredentialStore, error) {
+func (m *defaultCredentialManager) GetCredentialStore() (CredentialStore, error) {
 	if m.credentialStore == nil {
 		return nil, ErrCredentialStoreNotSet
 	}
