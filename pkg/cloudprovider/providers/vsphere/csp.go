@@ -6,6 +6,8 @@ import (
 	"github.com/golang/glog"
 	nodemanager "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
 	cspvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
+	cspvolumes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
+	cspvolumestypes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume/types"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
@@ -22,6 +24,7 @@ type CSP struct {
 	*VCP
 	virtualCenterManager cspvsphere.VirtualCenterManager
 	nodeManager          nodemanager.Manager
+	volumeManager        cspvolumes.Manager
 }
 
 var _ cloudprovider.Interface = &CSP{}
@@ -97,6 +100,19 @@ func (csp *CSP) NodeDeleted(obj interface{}) {
 
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
 func (csp *CSP) AttachDisk(vmDiskPath string, storagePolicyName string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
+	volumeID := &cspvolumestypes.VolumeID {
+		ID: vmDiskPath,
+		DatastoreURL: storagePolicyName,
+	}
+	node, err := csp.nodeManager.GetNode(convertToString(nodeName))
+	if err != nil {
+		return "", err
+	}
+	attachSpec := &cspvolumestypes.AttachDetachSpec{
+		VolumeID: volumeID,
+		VirtualMachine: node,
+	}
+	csp.volumeManager.AttachVolume(attachSpec)
 	return diskUUID, nil
 }
 
