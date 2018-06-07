@@ -33,14 +33,12 @@ var _ Volumes = &CSP{}
 
 type CSPID struct {
 	clusterType string
-	vcUserName  string
 	clusterID   string
 }
 
-func (csp *CSP) GetCSPID(server string) *CSPID {
+func (csp *CSP) GetCSPID() *CSPID {
 	return &CSPID{
 		clusterType: "KUBERNETES",
-		vcUserName:  csp.vsphereInstanceMap[server].conn.Username,
 		clusterID:   csp.cfg.Global.ClusterID,
 	}
 }
@@ -112,7 +110,11 @@ func (csp *CSP) AttachDisk(vmDiskPath string, storagePolicyName string, nodeName
 		VolumeID: volumeID,
 		VirtualMachine: node,
 	}
-	csp.volumeManager.AttachVolume(attachSpec)
+	diskUUID, err = csp.volumeManager.AttachVolume(attachSpec)
+	if err != nil {
+		glog.V(1).Infof("Failed to attach disk %s with err %+v", diskUUID, err)
+		return "", err
+	}
 	return diskUUID, nil
 }
 
@@ -134,12 +136,22 @@ func (csp *CSP) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (ma
 
 // CreateVolume creates a new vmdk with specified parameters.
 func (csp *CSP) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath string, err error) {
-	cspID := csp.GetCSPID(csp.cfg.Workspace.VCenterIP)
+	cspID := csp.GetCSPID()
 	glog.V(4).Infof("cspID: %+v", cspID)
-	// To test secrets
-	glog.V(4).Infof("Discovering Nodes", cspID)
-	csp.nodeManager.DiscoverNode(csp.vmUUID)
-	return "", nil
+	createSpec := &cspvolumestypes.CreateSpec{
+		Name: volumeOptions.Name,
+		DatastoreURLs: []string{csp.cfg.Workspace.DefaultDatastore},
+		BackingInfo: cspvolumestypes.BackingObjectInfo{
+			StoragePolicyID: volumeOptions.StoragePolicyID,
+			Capacity: uint64(volumeOptions.CapacityKB),
+		},
+	}
+	volumeID, err := csp.volumeManager.CreateVolume(createSpec)
+	if err != nil {
+		glog.V(1).Infof("Failed to create disk %s with error %+v", volumeOptions.Name, err)
+		return "", err
+	}
+	return volumeID.ID, nil
 }
 
 // DeleteVolume deletes vmdk.
