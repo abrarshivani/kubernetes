@@ -110,7 +110,11 @@ func (csp *CSP) AttachDisk(vmDiskPath string, storagePolicyName string, nodeName
 		VolumeID: volumeID,
 		VirtualMachine: node,
 	}
-	diskUUID, err = csp.volumeManager.AttachVolume(attachSpec)
+	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
+	if err != nil {
+		return "", err
+	}
+	diskUUID, err = cspvolumes.GetManager(vc).AttachVolume(attachSpec)
 	if err != nil {
 		glog.V(1).Infof("Failed to attach disk %s with err %+v", diskUUID, err)
 		return "", err
@@ -141,12 +145,16 @@ func (csp *CSP) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath str
 	createSpec := &cspvolumestypes.CreateSpec{
 		Name: volumeOptions.Name,
 		DatastoreURLs: []string{csp.cfg.Workspace.DefaultDatastore},
-		BackingInfo: cspvolumestypes.BackingObjectInfo{
+		BackingInfo: &cspvolumestypes.BackingObjectInfo{
 			StoragePolicyID: volumeOptions.StoragePolicyID,
 			Capacity: uint64(volumeOptions.CapacityKB),
 		},
 	}
-	volumeID, err := csp.volumeManager.CreateVolume(createSpec)
+	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
+	if err != nil {
+		return "", err
+	}
+	volumeID, err :=cspvolumes.GetManager(vc).CreateVolume(createSpec)
 	if err != nil {
 		glog.V(1).Infof("Failed to create disk %s with error %+v", volumeOptions.Name, err)
 		return "", err
