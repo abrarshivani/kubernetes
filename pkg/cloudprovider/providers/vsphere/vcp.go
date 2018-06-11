@@ -96,6 +96,8 @@ func GetVCP(cloud cloudprovider.Interface) (*VCP, error) {
 }
 
 
+var _ CommonVolumes = &VSphere{}
+
 // CreateVolume creates a new volume given its spec.
 func (vs *VSphere) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 	volPath, err := vs.CreateVolume(spec.VolumeOptions)
@@ -125,12 +127,25 @@ func (vs *VSphere) VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeNa
 
 // VolumesAreAttached checks if a list disks are attached to the given node.
 // Assumption: If node doesn't exist, disks are not attached to the node.
-func (vs *VSphere) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[string]bool, error) {
+func (vs *VSphere) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[*VolumeID]bool, error) {
 	vsphereNodeVolumes := make(map[k8stypes.NodeName][]string)
+	vsphereAttachedVolumes:= make(map[k8stypes.NodeName]map[*VolumeID]bool)
 	for node, volumes := range nodeVolumes {
 		for _, volume := range volumes {
 			vsphereNodeVolumes[node] = append(vsphereNodeVolumes[node], volume.ID)
 		}
 	}
-	return vs.DisksAreAttached(vsphereNodeVolumes)
+	attachedVolumes, err := vs.DisksAreAttached(vsphereNodeVolumes)
+	if err != nil {
+		return nil, err
+	}
+	for node, volumeIDs := range attachedVolumes {
+		if _, ok := vsphereAttachedVolumes[node]; !ok {
+			vsphereAttachedVolumes[node] = make(map[*VolumeID]bool)
+		}
+		for volumeID, attached := range volumeIDs {
+			vsphereAttachedVolumes[node][&VolumeID{ID: volumeID}] = attached
+		}
+	}
+	return vsphereAttachedVolumes, nil
 }

@@ -34,7 +34,7 @@ import (
 
 type vsphereVMDKAttacher struct {
 	host           volume.VolumeHost
-	vsphereVolumes vsphere.Volumes
+	vsphereVolumes vsphere.CommonVolumes
 }
 
 var _ volume.Attacher = &vsphereVMDKAttacher{}
@@ -84,7 +84,13 @@ func (attacher *vsphereVMDKAttacher) Attach(spec *volume.Spec, nodeName types.No
 
 	// vsphereCloud.AttachDisk checks if disk is already attached to host and
 	// succeeds in that case, so no need to do that separately.
-	diskUUID, err := attacher.vsphereVolumes.AttachDisk(volumeSource.VolumePath, volumeSource.StoragePolicyName, nodeName)
+	diskUUID, err := attacher.vsphereVolumes.AttachVSphereVolume(&vsphere.AttachVolumeSpec{
+		VolID: vsphere.VolumeID{
+			ID: volumeSource.VolumePath,
+		},
+		StoragePolicyName: volumeSource.StoragePolicyName,
+		NodeName: nodeName,
+	})
 	if err != nil {
 		glog.Errorf("Error attaching volume %q to node %q: %+v", volumeSource.VolumePath, nodeName, err)
 		return "", err
@@ -112,7 +118,7 @@ func (attacher *vsphereVMDKAttacher) VolumesAreAttached(specs []*volume.Spec, no
 
 func (attacher *vsphereVMDKAttacher) BulkVerifyVolumes(volumesByNode map[types.NodeName][]*volume.Spec) (map[types.NodeName]map[*volume.Spec]bool, error) {
 	volumesAttachedCheck := make(map[types.NodeName]map[*volume.Spec]bool)
-	volumePathsByNode := make(map[types.NodeName][]string)
+	volumePathsByNode := make(map[types.NodeName][]*vsphere.VolumeID)
 	volumeSpecMap := make(map[string]*volume.Spec)
 
 	for nodeName, volumeSpecs := range volumesByNode {
@@ -123,7 +129,7 @@ func (attacher *vsphereVMDKAttacher) BulkVerifyVolumes(volumesByNode map[types.N
 				continue
 			}
 			volPath := volumeSource.VolumePath
-			volumePathsByNode[nodeName] = append(volumePathsByNode[nodeName], volPath)
+			volumePathsByNode[nodeName] = append(volumePathsByNode[nodeName], &vsphere.VolumeID{ID: volPath})
 			nodeVolume, nodeVolumeExists := volumesAttachedCheck[nodeName]
 			if !nodeVolumeExists {
 				nodeVolume = make(map[*volume.Spec]bool)
@@ -133,16 +139,16 @@ func (attacher *vsphereVMDKAttacher) BulkVerifyVolumes(volumesByNode map[types.N
 			volumesAttachedCheck[nodeName] = nodeVolume
 		}
 	}
-	attachedResult, err := attacher.vsphereVolumes.DisksAreAttached(volumePathsByNode)
+	attachedResult, err := attacher.vsphereVolumes.VolumesAreAttached(volumePathsByNode)
 	if err != nil {
 		glog.Errorf("Error checking if volumes are attached to nodes: %+v. err: %v", volumePathsByNode, err)
 		return volumesAttachedCheck, err
 	}
 
 	for nodeName, nodeVolumes := range attachedResult {
-		for volumePath, attached := range nodeVolumes {
+		for volumeID, attached := range nodeVolumes {
 			if !attached {
-				spec := volumeSpecMap[volumePath]
+				spec := volumeSpecMap[volumeID.ID]
 				setNodeVolume(volumesAttachedCheck, spec, nodeName, false)
 			}
 		}
@@ -241,7 +247,7 @@ func (attacher *vsphereVMDKAttacher) MountDevice(spec *volume.Spec, devicePath s
 
 type vsphereVMDKDetacher struct {
 	mounter        mount.Interface
-	vsphereVolumes vsphere.Volumes
+	vsphereVolumes vsphere.CommonVolumes
 }
 
 var _ volume.Detacher = &vsphereVMDKDetacher{}
@@ -268,7 +274,7 @@ func (plugin *vsphereVolumePlugin) NewDeviceUnmounter() (volume.DeviceUnmounter,
 func (detacher *vsphereVMDKDetacher) Detach(volumeName string, nodeName types.NodeName) error {
 
 	volPath := getVolPathfromVolumeName(volumeName)
-	attached, err := detacher.vsphereVolumes.DiskIsAttached(volPath, nodeName)
+	attached, err := detacher.vsphereVolumes.VolumesIsAttached(vsphere.VolumeID{ID:volPath}, nodeName)
 	if err != nil {
 		// Log error and continue with detach
 		glog.Errorf(
@@ -284,7 +290,12 @@ func (detacher *vsphereVMDKDetacher) Detach(volumeName string, nodeName types.No
 
 	attachdetachMutex.LockKey(string(nodeName))
 	defer attachdetachMutex.UnlockKey(string(nodeName))
-	if err := detacher.vsphereVolumes.DetachDisk(volPath, nodeName); err != nil {
+	if err := detacher.vsphereVolumes.DetachVSphereVolume(&vsphere.DetachVolumeSpec{
+		VolID: vsphere.VolumeID {
+			ID: volPath,
+		},
+		NodeName: nodeName,
+	}); err != nil {
 		glog.Errorf("Error detaching volume %q: %v", volPath, err)
 		return err
 	}

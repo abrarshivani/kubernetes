@@ -44,7 +44,7 @@ type CommonVolumes interface {
 	VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeName) (bool, error)
 	// VolumesAreAttached checks if a list disks are attached to the given node.
 	// Assumption: If node doesn't exist, disks are not attached to the node.
-	VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[string]map[*VolumeID]bool, error)
+	VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[*VolumeID]bool, error)
 }
 
 

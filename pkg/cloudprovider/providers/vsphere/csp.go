@@ -402,3 +402,35 @@ func RegisterVirtualCenters(vsphereInstanceMap map[string]*VSphereInstance,
 	}
 	return nil
 }
+
+var _ CommonVolumes = &CSP{}
+
+// CreateVolume creates a new volume given its spec.
+func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
+	return VolumeID{}, nil
+}
+
+// AttachVolume attaches a volume to a virtual machine given the spec.
+func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (string, error) {
+	return "", nil
+}
+
+// DetachVolume detaches a volume from the virtual machine given the spec.
+func (csp *CSP) DetachVSphereVolume(spec *DetachVolumeSpec) error {
+	return nil
+}
+// DeleteVolume deletes a volume given its spec.
+func (csp *CSP) DeleteVSphereVolume(spec *DeleteVolumeSpec) error {
+	return nil
+}
+
+// VolumesAreAttached checks if a list disks are attached to the given node.
+// Assumption: If node doesn't exist, disks are not attached to the node.
+func (csp *CSP) VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeName) (bool, error) {
+	return false, nil
+}
+// VolumesAreAttached checks if a list disks are attached to the given node.
+// Assumption: If node doesn't exist, disks are not attached to the node.
+func (csp *CSP) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[*VolumeID]bool, error) {
+	return nil, nil
+}
