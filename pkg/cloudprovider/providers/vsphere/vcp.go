@@ -94,3 +94,43 @@ func GetVCP(cloud cloudprovider.Interface) (*VCP, error) {
 	}
 	return vcp, nil
 }
+
+
+// CreateVolume creates a new volume given its spec.
+func (vs *VSphere) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
+	volPath, err := vs.CreateVolume(spec.VolumeOptions)
+	return VolumeID{ID: volPath}, err
+}
+
+// AttachVolume attaches a volume to a virtual machine given the spec.
+func (vs *VSphere) AttachVSphereVolume(spec *AttachVolumeSpec) (string, error) {
+	return vs.AttachDisk(spec.VolID.ID, spec.StoragePolicyName, spec.NodeName)
+}
+
+// DetachVolume detaches a volume from the virtual machine given the spec.
+func (vs *VSphere)  DetachVSphereVolume(spec *DetachVolumeSpec) error {
+	return vs.DetachDisk(spec.VolID.ID, spec.NodeName)
+}
+
+// DeleteVolume deletes a volume given its spec.
+func (vs *VSphere) DeleteVSphereVolume(spec *DeleteVolumeSpec) error {
+	return vs.DeleteVolume(spec.VolID.ID)
+}
+
+// VolumesAreAttached checks if a list disks are attached to the given node.
+// Assumption: If node doesn't exist, disks are not attached to the node.
+func (vs *VSphere) VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeName) (bool, error) {
+	return vs.DiskIsAttached(volumeID.ID, nodeName)
+}
+
+// VolumesAreAttached checks if a list disks are attached to the given node.
+// Assumption: If node doesn't exist, disks are not attached to the node.
+func (vs *VSphere) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[string]bool, error) {
+	vsphereNodeVolumes := make(map[k8stypes.NodeName][]string)
+	for node, volumes := range nodeVolumes {
+		for _, volume := range volumes {
+			vsphereNodeVolumes[node] = append(vsphereNodeVolumes[node], volume.ID)
+		}
+	}
+	return vs.DisksAreAttached(vsphereNodeVolumes)
+}
