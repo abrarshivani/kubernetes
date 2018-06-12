@@ -43,7 +43,9 @@ type VirtualCenter struct {
 	// Client represents the govmomi client instance for the connection.
 	Client *govmomi.Client
 	// PbmClient represents the govmomi PBM Client instance.
-	PbmClient       *pbm.Client
+	PbmClient *pbm.Client
+	// CnsClient represents the CNS client instance.
+	CnsClient       *CNSClient
 	credentialsLock sync.Mutex
 }
 
@@ -134,7 +136,7 @@ func (vc *VirtualCenter) Connect(ctx context.Context) error {
 		return err
 	}
 	vc.UpdateCredentials(credential.User, credential.Password)
-	return vc.Connect(ctx)
+	return vc.connect(ctx)
 }
 
 // connect creates a connection to the virtual center host.

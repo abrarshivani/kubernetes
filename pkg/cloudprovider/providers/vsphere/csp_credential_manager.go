@@ -3,6 +3,7 @@ package vsphere
 import (
 	cspvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 )
+
 type CSPSecretCredentialManager struct {
 	*SecretCredentialManager
 }
@@ -15,7 +16,7 @@ func (secretCredentialManager *CSPSecretCredentialManager) GetCredential(server 
 		return nil, err
 	}
 	cspCredentials := &cspvsphere.Credential{
-		User: credentenal.User,
+		User:     credentenal.User,
 		Password: credentenal.Password,
 	}
 	return cspCredentials, nil

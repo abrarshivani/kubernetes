@@ -89,7 +89,7 @@ func (attacher *vsphereVMDKAttacher) Attach(spec *volume.Spec, nodeName types.No
 			ID: volumeSource.VolumePath,
 		},
 		StoragePolicyName: volumeSource.StoragePolicyName,
-		NodeName: nodeName,
+		NodeName:          nodeName,
 	})
 	if err != nil {
 		glog.Errorf("Error attaching volume %q to node %q: %+v", volumeSource.VolumePath, nodeName, err)
@@ -274,7 +274,7 @@ func (plugin *vsphereVolumePlugin) NewDeviceUnmounter() (volume.DeviceUnmounter,
 func (detacher *vsphereVMDKDetacher) Detach(volumeName string, nodeName types.NodeName) error {
 
 	volPath := getVolPathfromVolumeName(volumeName)
-	attached, err := detacher.vsphereVolumes.VolumesIsAttached(vsphere.VolumeID{ID:volPath}, nodeName)
+	attached, err := detacher.vsphereVolumes.VolumesIsAttached(vsphere.VolumeID{ID: volPath}, nodeName)
 	if err != nil {
 		// Log error and continue with detach
 		glog.Errorf(
@@ -291,7 +291,7 @@ func (detacher *vsphereVMDKDetacher) Detach(volumeName string, nodeName types.No
 	attachdetachMutex.LockKey(string(nodeName))
 	defer attachdetachMutex.UnlockKey(string(nodeName))
 	if err := detacher.vsphereVolumes.DetachVSphereVolume(&vsphere.DetachVolumeSpec{
-		VolID: vsphere.VolumeID {
+		VolID: vsphere.VolumeID{
 			ID: volPath,
 		},
 		NodeName: nodeName,

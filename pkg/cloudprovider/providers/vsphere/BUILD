@@ -9,6 +9,7 @@ load(
 go_library(
     name = "go_default_library",
     srcs = [
+        "common_volumes.go",
         "credentialmanager.go",
         "csp.go",
         "csp_credential_manager.go",

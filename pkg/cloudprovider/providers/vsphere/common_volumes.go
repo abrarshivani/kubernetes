@@ -6,23 +6,23 @@ import (
 )
 
 type VolumeID struct {
-	ID string
+	ID           string
 	DatastoreURL string
 }
 
 type AttachVolumeSpec struct {
-	VolID  	  VolumeID
-	NodeName  k8stypes.NodeName
+	VolID             VolumeID
+	NodeName          k8stypes.NodeName
 	StoragePolicyName string
 }
 
 type DetachVolumeSpec struct {
-	VolID  	  VolumeID
-	NodeName  k8stypes.NodeName
+	VolID    VolumeID
+	NodeName k8stypes.NodeName
 }
 
 type DeleteVolumeSpec struct {
-	VolID  	  VolumeID
+	VolID VolumeID
 }
 
 type CreateVolumeSpec struct {
@@ -46,5 +46,3 @@ type CommonVolumes interface {
 	// Assumption: If node doesn't exist, disks are not attached to the node.
 	VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[*VolumeID]bool, error)
 }
-
-

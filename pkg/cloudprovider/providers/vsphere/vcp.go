@@ -95,7 +95,6 @@ func GetVCP(cloud cloudprovider.Interface) (*VCP, error) {
 	return vcp, nil
 }
 
-
 var _ CommonVolumes = &VSphere{}
 
 // CreateVolume creates a new volume given its spec.
@@ -110,7 +109,7 @@ func (vs *VSphere) AttachVSphereVolume(spec *AttachVolumeSpec) (string, error) {
 }
 
 // DetachVolume detaches a volume from the virtual machine given the spec.
-func (vs *VSphere)  DetachVSphereVolume(spec *DetachVolumeSpec) error {
+func (vs *VSphere) DetachVSphereVolume(spec *DetachVolumeSpec) error {
 	return vs.DetachDisk(spec.VolID.ID, spec.NodeName)
 }
 
@@ -129,7 +128,7 @@ func (vs *VSphere) VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeNa
 // Assumption: If node doesn't exist, disks are not attached to the node.
 func (vs *VSphere) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[*VolumeID]bool, error) {
 	vsphereNodeVolumes := make(map[k8stypes.NodeName][]string)
-	vsphereAttachedVolumes:= make(map[k8stypes.NodeName]map[*VolumeID]bool)
+	vsphereAttachedVolumes := make(map[k8stypes.NodeName]map[*VolumeID]bool)
 	for node, volumes := range nodeVolumes {
 		for _, volume := range volumes {
 			vsphereNodeVolumes[node] = append(vsphereNodeVolumes[node], volume.ID)

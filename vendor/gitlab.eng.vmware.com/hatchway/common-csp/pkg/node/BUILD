@@ -9,8 +9,8 @@ go_library(
     importpath = "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node",
     visibility = ["//visibility:public"],
     deps = [
+        "//vendor/github.com/sirupsen/logrus:go_default_library",
         "//vendor/gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere:go_default_library",
-        "//vendor/gitlab.eng.vmware.com/hatchway/common-csp/vendor/github.com/sirupsen/logrus:go_default_library",
     ],
 )
 

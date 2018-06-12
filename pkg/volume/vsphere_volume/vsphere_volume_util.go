@@ -143,12 +143,12 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (volSpec 
 		return nil, fmt.Errorf("claim.Spec.Selector is not supported for dynamic provisioning on vSphere")
 	}
 
-	vmDiskPath, err := cloud.CreateVolume(volumeOptions)
+	volID, err := cloud.CreateVSphereVolume(&vsphere.CreateVolumeSpec{volumeOptions})
 	if err != nil {
 		return nil, err
 	}
 	volSpec = &VolumeSpec{
-		Path:              vmDiskPath,
+		Path:              volID.ID,
 		Size:              volSizeKiB,
 		Fstype:            fstype,
 		StoragePolicyName: volumeOptions.StoragePolicyName,
@@ -165,7 +165,11 @@ func (util *VsphereDiskUtil) DeleteVolume(vd *vsphereVolumeDeleter) error {
 		return err
 	}
 
-	if err = cloud.DeleteVolume(vd.volPath); err != nil {
+	if err = cloud.DeleteVSphereVolume(&vsphere.DeleteVolumeSpec{
+		VolID: vsphere.VolumeID{
+			ID: vd.volPath,
+		},
+	}); err != nil {
 		glog.V(2).Infof("Error deleting vsphere volume %s: %v", vd.volPath, err)
 		return err
 	}
