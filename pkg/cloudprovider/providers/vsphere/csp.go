@@ -407,30 +407,191 @@ var _ CommonVolumes = &CSP{}
 
 // CreateVolume creates a new volume given its spec.
 func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
-	return VolumeID{}, nil
+	glog.V(3).Infof("vSphere Cloud Provider creating disk %+v", spec)
+	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
+	if err != nil {
+		glog.Errorf("Cannot get virtual center %s from vitualcentermanager for creating disk %+v with error %+v",
+			csp.cfg.Workspace.VCenterIP, spec.Name, err)
+		return VolumeID{}, err
+	}
+
+	// TODO: Add labels and compute storagepolicyID from storagepolicyName
+	createSpec := &cspvolumestypes.CreateSpec{
+		Name: spec.Name,
+		DatastoreURLs: []string{csp.cfg.Workspace.DefaultDatastore},
+		BackingInfo: &cspvolumestypes.BackingObjectInfo{
+			StoragePolicyID: spec.StoragePolicyID,
+			Capacity: uint64(spec.CapacityKB),
+		},
+		ContainerCluster: cspvolumestypes.ContainerCluster{
+			ClusterID: csp.cfg.Global.ClusterID,
+			ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
+		},
+	}
+	glog.V(5).Infof("vSphere Cloud Provider creating volume %s with create spec %+v", spec.Name, createSpec)
+	volumeID, err := cspvolumes.GetManager(vc).CreateVolume(createSpec)
+	if err != nil {
+		glog.Errorf("Failed to create disk %s with error %+v", spec.Name, err)
+		return VolumeID{}, err
+	}
+	// TODO: Return VolumeID
+	volPath := GetVolPathFromVolumeID(volumeID)
+	return VolumeID{ID: volPath}, nil
 }
 
 // AttachVolume attaches a volume to a virtual machine given the spec.
-func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (string, error) {
-	return "", nil
+func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (diskUUID string, err error) {
+	nodeName := spec.NodeName
+	volID := spec.VolID
+	glog.V(3).Infof("vSphere Cloud Provider attaching disk %+v on node %s", volID, nodeName)
+	node, err := csp.nodeManager.GetNode(convertToString(nodeName))
+	if err != nil {
+		glog.Errorf("Cannot get node %s from nodemanager for attaching disk %+v with error %+v",
+			nodeName, volID, err)
+		return "", err
+	}
+	vc, err := csp.virtualCenterManager.GetVirtualCenter(node.VirtualCenterHost)
+	if err != nil {
+		glog.Errorf("Cannot get virtual center %s from vitualcentermanager for attaching disk %+v with error %+v", node.VirtualCenterHost, volID.ID, err)
+		return "", err
+	}
+	volumeID, datastoreURL := GetVolumeIDAndDatastoreURL(volID.ID)
+	attachSpec := &cspvolumestypes.AttachDetachSpec{
+		VolumeID: &cspvolumestypes.VolumeID{
+			ID: volumeID,
+			DatastoreURL: datastoreURL,
+		},
+		VirtualMachine: node,
+	}
+	glog.V(5).Infof("vSphere Cloud Provider attaching volume %s with attach spec %+v", volID.ID, attachSpec)
+	diskUUID, err = cspvolumes.GetManager(vc).AttachVolume(attachSpec)
+	if err != nil {
+		glog.Errorf("Failed to attach disk %s with err %+v", volumeID, err)
+		return "", err
+	}
+	return diskUUID, nil
 }
 
 // DetachVolume detaches a volume from the virtual machine given the spec.
 func (csp *CSP) DetachVSphereVolume(spec *DetachVolumeSpec) error {
+	nodeName := spec.NodeName
+	// TODO: Modify vmdiskPath to all input options in the log next line.
+	glog.V(3).Infof("vSphere Cloud Provider detaching disk %+v from node %s", spec.VolID, nodeName)
+	node, err := csp.nodeManager.GetNode(convertToString(nodeName))
+	if err != nil {
+		glog.Errorf("Cannot get node %s from nodemanager for detaching disk %+v with error %+v",
+			nodeName, spec.VolID, err)
+		return err
+	}
+	vc, err := csp.virtualCenterManager.GetVirtualCenter(node.VirtualCenterHost)
+	if err != nil {
+		glog.Errorf("Cannot get virtual center %s from vitualcentermanager for detaching disk %+v with error %+v", node.VirtualCenterHost, spec.VolID.ID, err)
+		return err
+	}
+
+	volID, datastoreURL := GetVolumeIDAndDatastoreURL(spec.VolID.ID)
+	detachSpec := &cspvolumestypes.AttachDetachSpec{
+		VolumeID: &cspvolumestypes.VolumeID{
+			ID: volID,
+			DatastoreURL: datastoreURL,
+		},
+		VirtualMachine: node,
+	}
+	glog.V(5).Infof("vSphere Cloud Provider detaching volume %s with detach spec %+v", volID, detachSpec)
+	err = cspvolumes.GetManager(vc).DetachVolume(detachSpec)
+	if err != nil {
+		glog.Errorf("Failed to dettach disk %s with err %+v", volID, err)
+		return err
+	}
 	return nil
 }
 // DeleteVolume deletes a volume given its spec.
 func (csp *CSP) DeleteVSphereVolume(spec *DeleteVolumeSpec) error {
+	// TODO: Modify vmdiskPath to all input options in the log next line.
+	glog.V(3).Infof("vSphere Cloud Provider deleting volume %+v", spec.VolID.ID)
+	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
+	if err != nil {
+		glog.Errorf("Cannot get virtual center %s from vitualcentermanager for delete disk %+v with error %+v",
+			csp.cfg.Workspace.VCenterIP, spec.VolID, err)
+		return err
+	}
+	volID, datastoreURL := GetVolumeIDAndDatastoreURL(spec.VolID.ID)
+	// TODO: Replace vmdiskPath to VolumeID in this function wherever required.
+	deleteSpec := &cspvolumestypes.DeleteSpec{
+		VolumeID: &cspvolumestypes.VolumeID{
+			ID: volID,
+			DatastoreURL: datastoreURL,
+		},
+	}
+
+	glog.V(5).Infof("vSphere Cloud Provider deleting volume %s with delete spec %+v",spec.VolID.ID, deleteSpec)
+	err = cspvolumes.GetManager(vc).DeleteVolume(deleteSpec)
+	if err != nil {
+		glog.Errorf("Failed to delete disk %s with error %+v", spec.VolID.ID, err)
+		return err
+	}
 	return nil
 }
 
 // VolumesAreAttached checks if a list disks are attached to the given node.
 // Assumption: If node doesn't exist, disks are not attached to the node.
 func (csp *CSP) VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeName) (bool, error) {
-	return false, nil
+	glog.V(3).Infof("vSphere Cloud Provider checking disk is attached %s to node %s", volumeID.ID, nodeName)
+	nodeVolumes := make(map[k8stypes.NodeName][]*VolumeID)
+	nodeVolumes[nodeName] = append(nodeVolumes[nodeName], &volumeID)
+	volumesAttached, err := csp.VolumesAreAttached(nodeVolumes)
+	if err != nil {
+		glog.Errorf("Failed to check disk is attached %s to node %s with error %+v", volumeID.ID, nodeName, err)
+		return false, err
+	}
+	return volumesAttached[nodeName][&volumeID], nil
 }
 // VolumesAreAttached checks if a list disks are attached to the given node.
 // Assumption: If node doesn't exist, disks are not attached to the node.
 func (csp *CSP) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[*VolumeID]bool, error) {
-	return nil, nil
+	glog.V(3).Infof("vSphere Cloud Provider checking disks are attached %+v", nodeVolumes)
+	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
+	if err != nil {
+		glog.Errorf("Cannot get virtual center %s from vitualcentermanager for checking disk are attach %+v with error %+v",
+			csp.cfg.Workspace.VCenterIP, nodeVolumes, err)
+		return nil, err
+	}
+	cspNodeVolumes := make(map[string][]*cspvolumestypes.VolumeID)
+	for k8snode, volumes := range nodeVolumes {
+		node := convertToString(k8snode)
+		for _, volume := range volumes {
+			volID, datastoreURL := GetVolumeIDAndDatastoreURL(volume.ID)
+			volumeID := &cspvolumestypes.VolumeID{
+				ID: volID,
+				DatastoreURL: datastoreURL,
+			}
+			cspNodeVolumes[node] = append(cspNodeVolumes[node], volumeID)
+		}
+	}
+	volumesAreAttached, err := cspvolumes.GetManager(vc).VolumesAreAttached(csp.nodeManager, cspNodeVolumes)
+	if err != nil {
+		glog.Errorf("Failed to check disk are attach %s with error %+v", volumesAreAttached, err)
+		return nil, err
+	}
+	attachedVolumes := make(map[k8stypes.NodeName]map[*VolumeID]bool)
+	for node, volumes := range volumesAreAttached {
+		k8snode := convertToK8sType(node)
+		if _, ok := attachedVolumes[k8snode]; !ok {
+			attachedVolumes[k8snode] = make(map[*VolumeID]bool)
+		}
+		for volumeID, attached := range volumes {
+			attachedVolumes[k8snode][&VolumeID{ID: GetVolPathFromVolumeID(volumeID)}] = attached
+		}
+	}
+	return attachedVolumes, nil
+}
+
+// TODO: Remove below functions after adding DatastoreURL and VolumeID variables in volume source structure
+func GetVolumeIDAndDatastoreURL(id string) (string, string){
+	dsPathObj, _ := vclib.GetDatastorePathObjFromVMDiskPath(id)
+	return dsPathObj.Path, dsPathObj.Datastore
+}
+
+func GetVolPathFromVolumeID(volumeID *cspvolumestypes.VolumeID) string {
+	return fmt.Sprintf("[%s] %s",volumeID.DatastoreURL, volumeID.ID)
 }
