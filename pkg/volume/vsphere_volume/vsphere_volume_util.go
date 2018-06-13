@@ -143,7 +143,10 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (volSpec 
 		return nil, fmt.Errorf("claim.Spec.Selector is not supported for dynamic provisioning on vSphere")
 	}
 
-	volID, err := cloud.CreateVSphereVolume(&vsphere.CreateVolumeSpec{volumeOptions})
+	volID, err := cloud.CreateVSphereVolume(&vsphere.CreateVolumeSpec{
+		VolumeOptions: volumeOptions,
+		PVC: v.options.PVC,
+	})
 	if err != nil {
 		return nil, err
 	}

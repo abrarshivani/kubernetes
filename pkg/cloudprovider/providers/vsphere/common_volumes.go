@@ -3,6 +3,7 @@ package vsphere
 import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	"k8s.io/api/core/v1"
 )
 
 type VolumeID struct {
@@ -27,6 +28,7 @@ type DeleteVolumeSpec struct {
 
 type CreateVolumeSpec struct {
 	*vclib.VolumeOptions
+	PVC *v1.PersistentVolumeClaim
 }
 
 // Manager provides functionality to manage volumes.

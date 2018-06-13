@@ -348,6 +348,7 @@ func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 			ClusterID:   csp.cfg.Global.ClusterID,
 			ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
 		},
+		Labels: AddPrefixToLabels(PrefixPVCLabel, spec.PVC.Labels),
 	}
 	glog.V(5).Infof("vSphere Cloud Provider creating volume %s with create spec %+v", spec.Name, createSpec)
 	volumeID, err := cspvolumes.GetManager(vc).CreateVolume(createSpec)
