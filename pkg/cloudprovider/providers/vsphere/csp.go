@@ -15,9 +15,16 @@ import (
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"net"
 	"strconv"
 	"strings"
+	"reflect"
+)
+
+
+var (
+	PrefixPVCLabel = "vmware#cns#pvc"
 )
 
 type CSP struct {
@@ -25,6 +32,7 @@ type CSP struct {
 	virtualCenterManager cspvsphere.VirtualCenterManager
 	nodeManager          nodemanager.Manager
 	volumeManager        cspvolumes.Manager
+	PVLister			 corelisters.PersistentVolumeLister
 }
 
 var _ cloudprovider.Interface = &CSP{}
@@ -57,6 +65,17 @@ func (csp *CSP) SetInformers(informerFactory informers.SharedInformerFactory) {
 		DeleteFunc: csp.NodeDeleted,
 	})
 	glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
+
+	pvcInformer := informerFactory.Core().V1().PersistentVolumeClaims().Informer()
+	pvcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		UpdateFunc: csp.PVCUpdated,
+		DeleteFunc: csp.PVCDeleted,
+	})
+	glog.V(4).Infof("PVC informers in vSphere cloud provider initialized")
+
+	csp.PVLister = informerFactory.Core().V1().PersistentVolumes().Lister()
+	glog.V(4).Infof("PVC informers in vSphere cloud provider initialized")
+
 }
 
 // Notification handler when node is added into k8s cluster.
@@ -83,6 +102,87 @@ func (csp *CSP) NodeDeleted(obj interface{}) {
 	csp.nodeManager.UnregisterNode(node.Name)
 }
 
+func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
+	oldPvc, ok := oldObj.(*v1.PersistentVolumeClaim)
+
+	if oldPvc == nil || !ok {
+		return
+	}
+
+	newPvc, ok := newObj.(*v1.PersistentVolumeClaim)
+
+	if newPvc == nil || !ok {
+		return
+	}
+
+	if newPvc.Status.Phase != v1.ClaimBound {
+		return
+	}
+
+	pv, err := getPersistentVolume(newPvc, csp.PVLister)
+	if err != nil {
+		glog.Errorf("Error getting Persistent Volume for pvc %q : %v", newPvc.UID, err)
+		return
+	}
+
+	if pv.Spec.PersistentVolumeSource.VsphereVolume == nil {
+		return
+	}
+
+	newLabels := newPvc.GetLabels()
+	oldLabels := oldPvc.GetLabels()
+	labelsEqual := reflect.DeepEqual(newLabels, oldLabels)
+
+	if !labelsEqual {
+		glog.V(4).Infof("Updating %#v labels to %#v in cns for volume %s", newLabels, pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
+		vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
+		if err != nil {
+			glog.Errorf("Cannot get virtual center object for server %s with error %+v", csp.cfg.Workspace.VCenterIP, err)
+			return
+		}
+		prefixedLabels := AddPrefixToLabels(PrefixPVCLabel, newLabels)
+		volID, datastoreURL := GetVolumeIDAndDatastoreURL(pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
+		updateSpec := &cspvolumestypes.UpdateSpec{
+			VolumeID: &cspvolumestypes.VolumeID{
+				ID: volID,
+				DatastoreURL: datastoreURL,
+			},
+			Labels: prefixedLabels,
+		}
+		cspvolumes.GetManager(vc).UpdateVolume(updateSpec)
+	}
+}
+
+func (csp *CSP) PVCDeleted(obj interface{}) {
+	pvc, ok := obj.(*v1.PersistentVolumeClaim)
+	if pvc == nil || !ok {
+		glog.Warningf("PVCDeleted: unrecognized object %+v", obj)
+		return
+	}
+	glog.V(4).Infof("PVC deleted: %+v", pvc)
+	pv, err := getPersistentVolume(pvc, csp.PVLister)
+	if err != nil {
+		glog.Errorf("Error getting Persistent Volume for pvc %q : %v", pvc.UID, err)
+		return
+	}
+	if pv.Spec.PersistentVolumeSource.VsphereVolume == nil {
+		return
+	}
+	// If the PV is retain we need to delete PVC labels
+	volID, datastoreURL := GetVolumeIDAndDatastoreURL(pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
+	updateSpec := &cspvolumestypes.UpdateSpec{
+		VolumeID: &cspvolumestypes.VolumeID{
+			ID: volID,
+			DatastoreURL: datastoreURL,
+		},
+	}
+	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
+	if err != nil {
+		glog.Errorf("Cannot get virtual center object for server %s with error %+v", csp.cfg.Workspace.VCenterIP, err)
+		return
+	}
+	cspvolumes.GetManager(vc).UpdateVolume(updateSpec)
+}
 
 // Instances returns an implementation of Instances for vSphere.
 func (csp *CSP) Instances() (cloudprovider.Instances, bool) {
@@ -417,4 +517,24 @@ func GetVolumeIDAndDatastoreURL(id string) (string, string) {
 
 func GetVolPathFromVolumeID(volumeID *cspvolumestypes.VolumeID) string {
 	return fmt.Sprintf("[%s] %s", volumeID.DatastoreURL, volumeID.ID)
+}
+
+func getPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.PersistentVolumeLister) (*v1.PersistentVolume, error) {
+	volumeName := pvc.Spec.VolumeName
+	pv, err := pvLister.Get(volumeName)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to find PV %q in PV informer cache with error : %v", volumeName, err)
+	}
+
+	return pv.DeepCopy(), nil
+}
+
+func AddPrefixToLabels(prefix string, labels map[string]string) (map[string]string){
+	prefixedLabels := make(map[string]string)
+	for labelKey, labelValue := range labels {
+		prefixedKey := strings.Join([]string{prefix, labelKey}, "#")
+		prefixedLabels[prefixedKey] = labelValue
+	}
+	return prefixedLabels
 }
