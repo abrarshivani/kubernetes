@@ -145,7 +145,7 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (volSpec 
 
 	volID, err := cloud.CreateVSphereVolume(&vsphere.CreateVolumeSpec{
 		VolumeOptions: volumeOptions,
-		PVC: v.options.PVC,
+		PVC:           v.options.PVC,
 	})
 	if err != nil {
 		return nil, err

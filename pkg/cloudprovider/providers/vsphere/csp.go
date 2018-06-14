@@ -11,17 +11,16 @@ import (
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
-	"reflect"
 )
-
 
 var (
 	PrefixPVCLabel = "vmware#cns#pvc"
@@ -32,7 +31,7 @@ type CSP struct {
 	virtualCenterManager cspvsphere.VirtualCenterManager
 	nodeManager          nodemanager.Manager
 	volumeManager        cspvolumes.Manager
-	PVLister			 corelisters.PersistentVolumeLister
+	PVLister             corelisters.PersistentVolumeLister
 }
 
 var _ cloudprovider.Interface = &CSP{}
@@ -142,9 +141,23 @@ func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
 		}
 		prefixedLabels := AddPrefixToLabels(PrefixPVCLabel, newLabels)
 		volID, datastoreURL := GetVolumeIDAndDatastoreURL(pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
+		if v1helper.GetPersistentVolumeClass(pv) == "" {
+			glog.V(4).Infof("Volume %v is provisioned statically", volID)
+			createSpec := &cspvolumestypes.CreateSpec{
+				Name: volID + "#" + datastoreURL,
+				ContainerCluster: cspvolumestypes.ContainerCluster{
+					ClusterID:   csp.cfg.Global.ClusterID,
+					ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
+				},
+				DatastoreURLs: []string{datastoreURL},
+				BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: volumeID},
+			}
+			csp.volumeManager.CreateVolume(createSpec)
+			return
+		}
 		updateSpec := &cspvolumestypes.UpdateSpec{
 			VolumeID: &cspvolumestypes.VolumeID{
-				ID: volID,
+				ID:           volID,
 				DatastoreURL: datastoreURL,
 			},
 			Labels: prefixedLabels,
@@ -172,7 +185,7 @@ func (csp *CSP) PVCDeleted(obj interface{}) {
 	volID, datastoreURL := GetVolumeIDAndDatastoreURL(pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
 	updateSpec := &cspvolumestypes.UpdateSpec{
 		VolumeID: &cspvolumestypes.VolumeID{
-			ID: volID,
+			ID:           volID,
 			DatastoreURL: datastoreURL,
 		},
 	}
@@ -378,6 +391,20 @@ func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (diskUUID string, er
 		return "", err
 	}
 	volumeID, datastoreURL := GetVolumeIDAndDatastoreURL(volID.ID)
+	// Statically provisioned volume
+	if v1helper.GetPersistentVolumeClass(spec.PV) == "" {
+		glog.V(4).Infof("Volume %v is provisioned statically", volID)
+		createSpec := &cspvolumestypes.CreateSpec{
+			Name: volumeID + "#" + datastoreURL,
+			ContainerCluster: cspvolumestypes.ContainerCluster{
+				ClusterID:   csp.cfg.Global.ClusterID,
+				ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
+			},
+			DatastoreURLs: []string{datastoreURL},
+			BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: volumeID},
+		}
+		csp.volumeManager.CreateVolume(createSpec)
+	}
 	attachSpec := &cspvolumestypes.AttachDetachSpec{
 		VolumeID: &cspvolumestypes.VolumeID{
 			ID:           volumeID,
@@ -531,7 +558,7 @@ func getPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.Per
 	return pv.DeepCopy(), nil
 }
 
-func AddPrefixToLabels(prefix string, labels map[string]string) (map[string]string){
+func AddPrefixToLabels(prefix string, labels map[string]string) map[string]string {
 	prefixedLabels := make(map[string]string)
 	for labelKey, labelValue := range labels {
 		prefixedKey := strings.Join([]string{prefix, labelKey}, "#")

@@ -1,9 +1,9 @@
 package vsphere
 
 import (
+	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
-	"k8s.io/api/core/v1"
 )
 
 type VolumeID struct {
@@ -15,6 +15,7 @@ type AttachVolumeSpec struct {
 	VolID             VolumeID
 	NodeName          k8stypes.NodeName
 	StoragePolicyName string
+	PV                *v1.PersistentVolume
 }
 
 type DetachVolumeSpec struct {

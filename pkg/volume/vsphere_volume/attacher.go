@@ -90,6 +90,7 @@ func (attacher *vsphereVMDKAttacher) Attach(spec *volume.Spec, nodeName types.No
 		},
 		StoragePolicyName: volumeSource.StoragePolicyName,
 		NodeName:          nodeName,
+		PV:                spec.PersistentVolume,
 	})
 	if err != nil {
 		glog.Errorf("Error attaching volume %q to node %q: %+v", volumeSource.VolumePath, nodeName, err)
