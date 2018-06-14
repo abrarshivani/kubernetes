@@ -152,6 +152,7 @@ func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
 				},
 				DatastoreURLs: []string{datastoreURL},
 				BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: volID},
+				Labels: prefixedLabels,
 			}
 			csp.volumeManager.CreateVolume(createSpec)
 			return
