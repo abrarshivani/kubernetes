@@ -148,6 +148,7 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (volSpec 
 		PVC:           v.options.PVC,
 	})
 	if err != nil {
+		glog.Errorf("Cannot create volume for pvc %s with err %+v", v.options.PVC.Name, err)
 		return nil, err
 	}
 	volSpec = &VolumeSpec{

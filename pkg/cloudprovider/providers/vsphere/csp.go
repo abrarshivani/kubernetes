@@ -133,13 +133,14 @@ func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
 	labelsEqual := reflect.DeepEqual(newLabels, oldLabels)
 
 	if !labelsEqual {
-		glog.V(4).Infof("Updating %#v labels to %#v in cns for volume %s", newLabels, pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
+		glog.V(4).Infof("Updating %#v labels to %#v in cns for volume %s", oldLabels, newLabels, pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
 		vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
 		if err != nil {
 			glog.Errorf("Cannot get virtual center object for server %s with error %+v", csp.cfg.Workspace.VCenterIP, err)
 			return
 		}
 		prefixedLabels := AddPrefixToLabels(PrefixPVCLabel, newLabels)
+		glog.V(4).Infof("Prefixed Labels are %+v", prefixedLabels)
 		volID, datastoreURL := GetVolumeIDAndDatastoreURL(pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
 		if v1helper.GetPersistentVolumeClass(pv) == "" {
 			glog.V(4).Infof("Volume %v is provisioned statically", volID)
@@ -150,7 +151,7 @@ func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
 					ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
 				},
 				DatastoreURLs: []string{datastoreURL},
-				BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: volumeID},
+				BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: volID},
 			}
 			csp.volumeManager.CreateVolume(createSpec)
 			return
