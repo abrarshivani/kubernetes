@@ -142,6 +142,7 @@ func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
 		prefixedLabels := AddPrefixToLabels(PrefixPVCLabel, newLabels)
 		glog.V(4).Infof("Prefixed Labels are %+v", prefixedLabels)
 		volID, datastoreURL := GetVolumeIDAndDatastoreURL(pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
+		// TODO: Replace it with GetVolumeInfo CNS API once available
 		if v1helper.GetPersistentVolumeClass(pv) == "" {
 			glog.V(4).Infof("Volume %v is provisioned statically", volID)
 			createSpec := &cspvolumestypes.CreateSpec{
@@ -394,6 +395,7 @@ func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (diskUUID string, er
 	}
 	volumeID, datastoreURL := GetVolumeIDAndDatastoreURL(volID.ID)
 	// Statically provisioned volume
+	// TODO: Replace it with GetVolumeInfo CNS API once available
 	if v1helper.GetPersistentVolumeClass(spec.PV) == "" {
 		glog.V(4).Infof("Volume %v is provisioned statically", volID)
 		createSpec := &cspvolumestypes.CreateSpec{
