@@ -118,7 +118,7 @@ func (vs *VSphere) DeleteVSphereVolume(spec *DeleteVolumeSpec) error {
 	return vs.DeleteVolume(spec.VolID.ID)
 }
 
-// VolumesAreAttached checks if a list disks are attached to the given node.
+// VolumesIsAttached checks if a disk is attached to the given node.
 // Assumption: If node doesn't exist, disks are not attached to the node.
 func (vs *VSphere) VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeName) (bool, error) {
 	return vs.DiskIsAttached(volumeID.ID, nodeName)
@@ -136,6 +136,7 @@ func (vs *VSphere) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*Volum
 	}
 	attachedVolumes, err := vs.DisksAreAttached(vsphereNodeVolumes)
 	if err != nil {
+		glog.Errorf("Failed to check whether disks are attached to nodes %+v with err %+v", vsphereAttachedVolumes, err)
 		return nil, err
 	}
 	for node, volumeIDs := range attachedVolumes {

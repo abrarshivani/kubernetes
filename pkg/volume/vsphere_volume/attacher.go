@@ -296,7 +296,7 @@ func (detacher *vsphereVMDKDetacher) Detach(volumeName string, nodeName types.No
 		},
 		NodeName: nodeName,
 	}); err != nil {
-		glog.Errorf("Error detaching volume %q: %v", volPath, err)
+		glog.Errorf("Error detaching volume %q from node %q: %v", volPath, nodeName, err)
 		return err
 	}
 	return nil

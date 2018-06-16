@@ -39,7 +39,7 @@ type CommonVolumes interface {
 	DetachVSphereVolume(spec *DetachVolumeSpec) error
 	// DeleteVolume deletes a volume given its spec.
 	DeleteVSphereVolume(spec *DeleteVolumeSpec) error
-	// VolumesAreAttached checks if a list disks are attached to the given node.
+	// VolumesIsAttached checks if a disk is attached to the given node.
 	// Assumption: If node doesn't exist, disks are not attached to the node.
 	VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeName) (bool, error)
 	// VolumesAreAttached checks if a list disks are attached to the given node.
