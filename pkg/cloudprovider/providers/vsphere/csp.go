@@ -73,7 +73,7 @@ func (csp *CSP) SetInformers(informerFactory informers.SharedInformerFactory) {
 	glog.V(4).Infof("PVC informers in vSphere cloud provider initialized")
 
 	csp.PVLister = informerFactory.Core().V1().PersistentVolumes().Lister()
-	glog.V(4).Infof("PVC informers in vSphere cloud provider initialized")
+	glog.V(4).Infof("PV lister in vSphere cloud provider initialized")
 
 }
 
