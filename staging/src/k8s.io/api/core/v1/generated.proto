@@ -4733,6 +4733,7 @@ message VolumeSource {
 // Represents a vSphere volume resource.
 message VsphereVirtualDiskVolumeSource {
   // Path that identifies vSphere volume vmdk
+  // +optional
   optional string volumePath = 1;
 
   // Filesystem type to mount.
@@ -4748,6 +4749,14 @@ message VsphereVirtualDiskVolumeSource {
   // Storage Policy Based Management (SPBM) profile ID associated with the StoragePolicyName.
   // +optional
   optional string storagePolicyID = 4;
+
+  // Id of Volume.
+  // +optional
+  optional string volumeId = 5;
+
+  // Url of the Datastore on which volume is provisioned.
+  // +optional
+  optional string datastoreUrl = 6;
 }
 
 // The weights of all of the matched WeightedPodAffinityTerm fields are added per-node to find the most preferred node(s)

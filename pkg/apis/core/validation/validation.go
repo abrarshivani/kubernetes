@@ -1327,8 +1327,10 @@ func validateAzureDisk(azure *core.AzureDiskVolumeSource, fldPath *field.Path) f
 
 func validateVsphereVolumeSource(cd *core.VsphereVirtualDiskVolumeSource, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	if len(cd.VolumePath) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath.Child("volumePath"), ""))
+	if len(cd.VolumePath) == 0 && len(cd.VolumeID) == 0 {
+		allErrs = append(allErrs, field.Invalid(fldPath, "", "specify one of: `volumePath` or `volumeId`"))
+	} else if len(cd.VolumePath) != 0 && len(cd.VolumeID) != 0 {
+		allErrs = append(allErrs, field.Invalid(fldPath, "", "Can not specify both `volumePath` and `volumeId`. Specify one of them."))
 	}
 	return allErrs
 }

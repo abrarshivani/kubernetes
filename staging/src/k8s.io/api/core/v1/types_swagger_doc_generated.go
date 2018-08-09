@@ -2315,6 +2315,8 @@ var map_VsphereVirtualDiskVolumeSource = map[string]string{
 	"fsType":            "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
 	"storagePolicyName": "Storage Policy Based Management (SPBM) profile name.",
 	"storagePolicyID":   "Storage Policy Based Management (SPBM) profile ID associated with the StoragePolicyName.",
+	"volumeId":          "Id of Volume.",
+	"datastoreUrl":      "Url of the Datastore on which volume is provisioned.",
 }
 
 func (VsphereVirtualDiskVolumeSource) SwaggerDoc() map[string]string {

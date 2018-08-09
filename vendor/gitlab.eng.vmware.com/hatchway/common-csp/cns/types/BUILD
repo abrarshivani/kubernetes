@@ -7,6 +7,7 @@ go_library(
         "if.go",
         "types.go",
     ],
+    importmap = "k8s.io/kubernetes/vendor/gitlab.eng.vmware.com/hatchway/common-csp/cns/types",
     importpath = "gitlab.eng.vmware.com/hatchway/common-csp/cns/types",
     visibility = ["//visibility:public"],
     deps = ["//vendor/github.com/vmware/govmomi/vim25/types:go_default_library"],

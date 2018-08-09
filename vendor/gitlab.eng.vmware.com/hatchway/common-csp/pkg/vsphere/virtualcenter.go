@@ -24,9 +24,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/pbm"
 	"github.com/vmware/govmomi/session"
+	"github.com/vmware/govmomi/view"
 	"github.com/vmware/govmomi/vim25"
+	"github.com/vmware/govmomi/vim25/mo"
 )
 
 const (
@@ -219,6 +222,58 @@ func (vc *VirtualCenter) GetDatacenters(ctx context.Context) ([]*Datacenter, err
 		return vc.getDatacenters(ctx, vc.Config.DatacenterPaths)
 	}
 	return vc.listDatacenters(ctx)
+}
+
+// GetDatacenter returns the Datacenter for given datacenter path
+func (vc *VirtualCenter) GetDatacenter(ctx context.Context, datacenterPath string) (*Datacenter, error) {
+	finder := find.NewFinder(vc.Client.Client, false)
+	datacenter, err := finder.Datacenter(ctx, datacenterPath)
+	if err != nil {
+		log.WithFields(log.Fields{"datacenterPath": datacenterPath, "err": err}).Error("Failed to fetch datacenter")
+		return nil, err
+	}
+	dc := &Datacenter{Datacenter: datacenter, VirtualCenterHost: vc.Config.Host}
+	return dc, nil
+}
+
+// GetDatastoresByURL returns list of Datastores by URL found on the VirtualCenter.
+// If URL is not found in vCenter, the corresponding datastore reference entry will be nil in the map.
+func (vc *VirtualCenter) GetDatastoresByURL(ctx context.Context, datastoreURLs []string) (map[string]*Datastore, error) {
+	// Create a view of Datastore objects
+	view := view.NewManager(vc.Client.Client)
+	containerView, err := view.CreateContainerView(ctx, vc.Client.Client.ServiceContent.RootFolder, []string{"Datastore"}, true)
+	if err != nil {
+		log.WithFields(log.Fields{"datastoreURL": datastoreURLs, "err": err}).
+			Error("Failed to create container view for datastores")
+		return nil, err
+	}
+	defer containerView.Destroy(ctx)
+
+	// Retrieve summary property for all datastores
+	var datastoreMoList []mo.Datastore
+	err = containerView.Retrieve(ctx, []string{"Datastore"}, []string{"summary"}, &datastoreMoList)
+	if err != nil {
+		log.WithFields(log.Fields{"datastoreURL": datastoreURLs, "err": err}).
+			Error("Failed to retrieve summary property of all datastores")
+		return nil, err
+	}
+
+	datastoreURLObjMap := make(map[string]*Datastore)
+	// Create Datastore-URL Map for faster search
+	dsURLMap := make(map[string]bool)
+	for _, dsURL := range datastoreURLs {
+		dsURLMap[dsURL] = true
+	}
+	for _, datastoreMo := range datastoreMoList {
+		if _, ok := dsURLMap[datastoreMo.Summary.Url]; ok {
+			datastoreURLObjMap[datastoreMo.Summary.Url] =
+				&Datastore{
+					Datastore:  object.NewDatastore(vc.Client.Client, *datastoreMo.Summary.Datastore),
+					Datacenter: nil,
+				}
+		}
+	}
+	return datastoreURLObjMap, nil
 }
 
 // Disconnect disconnects the virtual center host connection if connected.

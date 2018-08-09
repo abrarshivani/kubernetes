@@ -6,6 +6,7 @@ go_library(
         "manager.go",
         "util.go",
     ],
+    importmap = "k8s.io/kubernetes/vendor/gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume",
     importpath = "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume",
     visibility = ["//visibility:public"],
     deps = [

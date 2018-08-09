@@ -41,6 +41,7 @@ filegroup(
         "//vendor/github.com/vmware/govmomi/vapi/rest:all-srcs",
         "//vendor/github.com/vmware/govmomi/vapi/simulator:all-srcs",
         "//vendor/github.com/vmware/govmomi/vapi/tags:all-srcs",
+        "//vendor/github.com/vmware/govmomi/view:all-srcs",
         "//vendor/github.com/vmware/govmomi/vim25:all-srcs",
     ],
     tags = ["automanaged"],

@@ -70,6 +70,8 @@ type VolumeSpec struct {
 	Fstype            string
 	StoragePolicyID   string
 	StoragePolicyName string
+	VolumeID          string
+	DatastoreURL      string
 }
 
 func verifyDevicePath(path string) (string, error) {
@@ -152,7 +154,9 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (volSpec 
 		return nil, err
 	}
 	volSpec = &VolumeSpec{
-		Path:              volID.ID,
+		Path:              volID.VolumePath,
+		VolumeID:          volID.ID,
+		DatastoreURL:      volID.DatastoreURL,
 		Size:              volSizeKiB,
 		Fstype:            fstype,
 		StoragePolicyName: volumeOptions.StoragePolicyName,

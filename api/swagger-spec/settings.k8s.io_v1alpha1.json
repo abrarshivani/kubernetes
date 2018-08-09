@@ -2256,9 +2256,6 @@
    "v1.VsphereVirtualDiskVolumeSource": {
     "id": "v1.VsphereVirtualDiskVolumeSource",
     "description": "Represents a vSphere volume resource.",
-    "required": [
-     "volumePath"
-    ],
     "properties": {
      "volumePath": {
       "type": "string",
@@ -2275,6 +2272,14 @@
      "storagePolicyID": {
       "type": "string",
       "description": "Storage Policy Based Management (SPBM) profile ID associated with the StoragePolicyName."
+     },
+     "volumeId": {
+      "type": "string",
+      "description": "Id of Volume."
+     },
+     "datastoreUrl": {
+      "type": "string",
+      "description": "Url of the Datastore on which volume is provisioned."
      }
     }
    },

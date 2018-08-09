@@ -7511,6 +7511,8 @@ func autoConvert_v1_VsphereVirtualDiskVolumeSource_To_core_VsphereVirtualDiskVol
 	out.FSType = in.FSType
 	out.StoragePolicyName = in.StoragePolicyName
 	out.StoragePolicyID = in.StoragePolicyID
+	out.VolumeID = in.VolumeID
+	out.DatastoreURL = in.DatastoreURL
 	return nil
 }
 
@@ -7524,6 +7526,8 @@ func autoConvert_core_VsphereVirtualDiskVolumeSource_To_v1_VsphereVirtualDiskVol
 	out.FSType = in.FSType
 	out.StoragePolicyName = in.StoragePolicyName
 	out.StoragePolicyID = in.StoragePolicyID
+	out.VolumeID = in.VolumeID
+	out.DatastoreURL = in.DatastoreURL
 	return nil
 }
 

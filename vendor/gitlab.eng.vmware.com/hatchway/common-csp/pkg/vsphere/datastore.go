@@ -21,7 +21,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/vim25/methods"
+	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 )
 
@@ -31,11 +33,6 @@ type Datastore struct {
 	*object.Datastore
 	// Datacenter represents the datacenter on which the Datastore resides.
 	Datacenter *Datacenter
-}
-
-func (ds *Datastore) String() string {
-	return fmt.Sprintf("Datastore [Datstore: %v, Datacenter: %v]",
-		ds.Datastore, ds.Datacenter)
 }
 
 // stripDatastorePrefix strips the Datastore prefix from the given disk path.
@@ -62,4 +59,16 @@ func (ds *Datastore) GetDiskPathFromUUID(ctx context.Context, fcdUUID string) (s
 	log.WithFields(log.Fields{"ds": ds, "req": req, "res": res}).Info("Successfully retrieved VStorageObject")
 	diskPath := res.Returnval.Config.Backing.(*types.BaseConfigInfoDiskFileBackingInfo).FilePath
 	return ds.stripDatastorePrefix(diskPath), nil
+}
+
+// GetDatatoreURL returns the URL of datastore
+func (ds *Datastore) GetDatatoreUrl(ctx context.Context) (string, error) {
+	var dsMo mo.Datastore
+	pc := property.DefaultCollector(ds.Client())
+	err := pc.RetrieveOne(ctx, ds.Datastore.Reference(), []string{"summary"}, &dsMo)
+	if err != nil {
+		log.WithFields(log.Fields{"err": err}).Error("Failed to retrieve datastore summary property")
+		return "", err
+	}
+	return dsMo.Summary.Url, nil
 }

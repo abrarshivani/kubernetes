@@ -13,3 +13,12 @@ func IsInvalidCredentialsError(err error) bool {
 	}
 	return isInvalidCredentialsError
 }
+
+// IsManagedObjectNotFoundError returns true if error is of type ManagedObjectNotFound
+func IsManagedObjectNotFoundError(err error) bool {
+	isManagedObjectNotFoundError := false
+	if soap.IsSoapFault(err) {
+		_, isManagedObjectNotFoundError = soap.ToSoapFault(err).VimFault().(types.ManagedObjectNotFound)
+	}
+	return isManagedObjectNotFoundError
+}

@@ -3,6 +3,7 @@ package vsphere
 import (
 	"context"
 	"errors"
+
 	"github.com/golang/glog"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider"
@@ -100,28 +101,28 @@ var _ CommonVolumes = &VSphere{}
 // CreateVolume creates a new volume given its spec.
 func (vs *VSphere) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 	volPath, err := vs.CreateVolume(spec.VolumeOptions)
-	return VolumeID{ID: volPath}, err
+	return VolumeID{VolumePath: volPath}, err
 }
 
 // AttachVolume attaches a volume to a virtual machine given the spec.
 func (vs *VSphere) AttachVSphereVolume(spec *AttachVolumeSpec) (string, error) {
-	return vs.AttachDisk(spec.VolID.ID, spec.StoragePolicyName, spec.NodeName)
+	return vs.AttachDisk(spec.VolID.VolumePath, spec.StoragePolicyName, spec.NodeName)
 }
 
 // DetachVolume detaches a volume from the virtual machine given the spec.
 func (vs *VSphere) DetachVSphereVolume(spec *DetachVolumeSpec) error {
-	return vs.DetachDisk(spec.VolID.ID, spec.NodeName)
+	return vs.DetachDisk(spec.VolID.VolumePath, spec.NodeName)
 }
 
 // DeleteVolume deletes a volume given its spec.
 func (vs *VSphere) DeleteVSphereVolume(spec *DeleteVolumeSpec) error {
-	return vs.DeleteVolume(spec.VolID.ID)
+	return vs.DeleteVolume(spec.VolID.VolumePath)
 }
 
 // VolumesIsAttached checks if a disk is attached to the given node.
 // Assumption: If node doesn't exist, disks are not attached to the node.
 func (vs *VSphere) VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeName) (bool, error) {
-	return vs.DiskIsAttached(volumeID.ID, nodeName)
+	return vs.DiskIsAttached(volumeID.VolumePath, nodeName)
 }
 
 // VolumesAreAttached checks if a list disks are attached to the given node.

@@ -3,6 +3,11 @@ package vsphere
 import (
 	"context"
 	"fmt"
+	"net"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/golang/glog"
 	nodemanager "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
 	cspvolumes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
@@ -16,10 +21,6 @@ import (
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
-	"net"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 var (
@@ -153,7 +154,7 @@ func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
 				},
 				DatastoreURLs: []string{datastoreURL},
 				BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: volID},
-				Labels: prefixedLabels,
+				Labels:        prefixedLabels,
 			}
 			csp.volumeManager.CreateVolume(createSpec)
 			return
@@ -344,6 +345,7 @@ var _ CommonVolumes = &CSP{}
 
 // CreateVolume creates a new volume given its spec.
 func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
+	var err error
 	glog.V(3).Infof("vSphere Cloud Provider creating disk %+v", spec)
 	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
 	if err != nil {
@@ -352,13 +354,51 @@ func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 		return VolumeID{}, err
 	}
 
-	// TODO: Add labels and compute storagepolicyID from storagepolicyName
+	var datastore string
+	var datastoreUrl string
+	// If datastore not specified, then use default datastore
+	if spec.Datastore == "" {
+		datastore = csp.cfg.Workspace.DefaultDatastore
+	} else {
+		datastore = spec.Datastore
+	}
+	datastore = strings.TrimSpace(datastore)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	datacenter, err := vc.GetDatacenter(ctx, csp.cfg.Workspace.Datacenter)
+	if err != nil {
+		glog.Errorf("Failed to find Datacenter:%+v from VC: %+v, Error: %+v", csp.cfg.Workspace.Datacenter, csp.cfg.Workspace.VCenterIP, err)
+		return VolumeID{}, err
+	}
+	datastoreObj, err := datacenter.GetDatastoreByName(ctx, datastore)
+	if err != nil {
+		glog.Errorf("Failed to find Datastore:%+v in Datacenter:%+v from VC:%+v, Error: %+v", datastore, csp.cfg.Workspace.Datacenter, csp.cfg.Workspace.VCenterIP, err)
+		return VolumeID{}, err
+	}
+	datastoreUrl, err = datastoreObj.GetDatatoreUrl(ctx)
+	if err != nil {
+		glog.Errorf("Failed to get URL for the datastore:%+v , Error: %+v", datastore, err)
+		return VolumeID{}, err
+	}
+	// TODO:
+	// 1. Make sure datastore is shared across all Kubernetes nodes.
+	// 2. Compute storagepolicyID from storagepolicyName
+	// 3. And handle following cases.
+	//    * If SPBM Policy and datastore is specified in the SC, Pass URL of datastore specified in the SC in CreateSpec.
+	//		(For this case if datastore is not compatible, server should fail provisioning volume)
+	//    * If SPBM Policy is passed in the SC but datastore is not specified in the SC, Pass list of all shared datastores URLs to the spec.
+	//		(For this case, server should select compatible datastore with maximum available space)
+	//    * If no policy is specified and no datastore is specified in either SC or vsphere.conf, pass list of all shared datastore URL.
+	//    (For this case, server should select datastore with maximum available space)
+
 	createSpec := &cspvolumestypes.CreateSpec{
 		Name:          spec.Name,
-		DatastoreURLs: []string{csp.cfg.Workspace.DefaultDatastore},
-		BackingInfo: &cspvolumestypes.BackingObjectInfo{
-			StoragePolicyID: spec.StoragePolicyID,
-			Capacity:        uint64(spec.CapacityKB),
+		DatastoreURLs: []string{datastoreUrl},
+		BackingInfo: &cspvolumestypes.BlockBackingInfo{
+			BackingObjectInfo: cspvolumestypes.BackingObjectInfo{
+				StoragePolicyID: spec.StoragePolicyID,
+				Capacity:        uint64(spec.CapacityKB) / 1024,
+			},
 		},
 		ContainerCluster: cspvolumestypes.ContainerCluster{
 			ClusterID:   csp.cfg.Global.ClusterID,
@@ -372,9 +412,7 @@ func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 		glog.Errorf("Failed to create disk %s with error %+v", spec.Name, err)
 		return VolumeID{}, err
 	}
-	// TODO: Return VolumeID
-	volPath := GetVolPathFromVolumeID(volumeID)
-	return VolumeID{ID: volPath}, nil
+	return VolumeID{ID: volumeID.ID, DatastoreURL: volumeID.DatastoreURL, VolumePath: ""}, nil
 }
 
 // AttachVolume attaches a volume to a virtual machine given the spec.

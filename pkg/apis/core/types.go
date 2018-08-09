@@ -1185,6 +1185,7 @@ type AzureFilePersistentVolumeSource struct {
 // Represents a vSphere volume resource.
 type VsphereVirtualDiskVolumeSource struct {
 	// Path that identifies vSphere volume vmdk
+	// +optional
 	VolumePath string
 	// Filesystem type to mount.
 	// Must be a filesystem type supported by the host operating system.
@@ -1197,6 +1198,12 @@ type VsphereVirtualDiskVolumeSource struct {
 	// Storage Policy Based Management (SPBM) profile ID associated with the StoragePolicyName.
 	// +optional
 	StoragePolicyID string
+	// ID of Volume.
+	// +optional
+	VolumeID string
+	// Url of the Datastore on which volume is provisioned.
+	// +optional
+	DatastoreURL string
 }
 
 // Represents a Photon Controller persistent disk resource.

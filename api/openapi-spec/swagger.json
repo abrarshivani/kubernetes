@@ -2,7 +2,7 @@
   "swagger": "2.0",
   "info": {
    "title": "Kubernetes",
-   "version": "v1.13.0"
+   "version": "v0.0.0"
   },
   "paths": {
    "/api/": {
@@ -84886,10 +84886,11 @@
    },
    "io.k8s.api.core.v1.VsphereVirtualDiskVolumeSource": {
     "description": "Represents a vSphere volume resource.",
-    "required": [
-     "volumePath"
-    ],
     "properties": {
+     "datastoreUrl": {
+      "description": "Url of the Datastore on which volume is provisioned.",
+      "type": "string"
+     },
      "fsType": {
       "description": "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
       "type": "string"
@@ -84900,6 +84901,10 @@
      },
      "storagePolicyName": {
       "description": "Storage Policy Based Management (SPBM) profile name.",
+      "type": "string"
+     },
+     "volumeId": {
+      "description": "Id of Volume.",
       "type": "string"
      },
      "volumePath": {

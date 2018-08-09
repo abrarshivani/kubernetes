@@ -25,7 +25,7 @@ import (
 	cnstypes "gitlab.eng.vmware.com/hatchway/common-csp/cns/types"
 	node "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
 	"gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume/types"
-	"gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
+	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 )
 
 // Manager provides functionality to manage volumes.
@@ -44,7 +44,7 @@ type Manager interface {
 	GetVolumeInfo(spec *types.QuerySpec) (bool, error)
 	// VolumesAreAttached checks if a list disks are attached to the given node.
 	// Assumption: If node doesn't exist, disks are not attached to the node.
-	VolumesAreAttached(nm node.Manager, nodeVolumes map[string][]*types.VolumeID) (map[string]map[*types.VolumeID]bool, error)
+	VolumesAreAttached(nodeMgr node.Manager, nodeVolumes map[string][]*types.VolumeID) (map[string]map[*types.VolumeID]bool, error)
 }
 
 var (
@@ -55,7 +55,7 @@ var (
 )
 
 // GetManager returns the Manager singleton.
-func GetManager(vc *vsphere.VirtualCenter) Manager {
+func GetManager(vc *cnsvsphere.VirtualCenter) Manager {
 	onceForManager.Do(func() {
 		log.Info("Initializing volume.defaultManager...")
 		managerInstance = &defaultManager{
@@ -68,7 +68,7 @@ func GetManager(vc *vsphere.VirtualCenter) Manager {
 
 // DefaultManager provides functionality to manage volumes.
 type defaultManager struct {
-	virtualCenter *vsphere.VirtualCenter
+	virtualCenter *cnsvsphere.VirtualCenter
 }
 
 // CreateVolume creates a new volume given its spec.
@@ -112,7 +112,13 @@ func (m *defaultManager) CreateVolume(spec *types.CreateSpec) (*types.VolumeID, 
 	}
 	for _, res := range createResults {
 		if res.Key == taskInfo.Task.Value {
-			createRes := res.Value.(*cnstypes.CnsVolumeCreateResult)
+			if res.Value == nil {
+				log.WithFields(log.Fields{
+					"host": m.virtualCenter.Config.Host, "taskID": taskInfo.Task.Value, "createResults": createResults,
+				}).Error("nil returned for CnsVolumeCreateResult")
+				break
+			}
+			createRes := res.Value.(cnstypes.CnsVolumeCreateResult)
 			log.WithFields(log.Fields{
 				"host": m.virtualCenter.Config.Host, "taskID": taskInfo.Task.Value,
 				"volumeID": createRes.VolumeId.Id, "DatastoreURL": createRes.VolumeId.DatastoreUrl,
@@ -124,7 +130,7 @@ func (m *defaultManager) CreateVolume(spec *types.CreateSpec) (*types.VolumeID, 
 		}
 	}
 	log.WithFields(log.Fields{
-		"host": m.virtualCenter.Config.Host, "taskID": taskInfo.Task.Value,
+		"host": m.virtualCenter.Config.Host, "taskID": taskInfo.Task.Value, "createResults": createResults,
 	}).Error("unable to find the task result for CreateVolume task")
 	return nil, fmt.Errorf("Unable to find the taskresult for task: %s on vc: %s",
 		taskInfo.Task.Value, m.virtualCenter.Config.Host)
@@ -176,7 +182,13 @@ func (m *defaultManager) AttachVolume(spec *types.AttachDetachSpec) (string, err
 	}
 	for _, res := range attachResults {
 		if res.Key == taskInfo.Task.Value {
-			attachRes := res.Value.(*cnstypes.CnsVolumeAttachResult)
+			if res.Value == nil {
+				log.WithFields(log.Fields{
+					"host": m.virtualCenter.Config.Host, "taskID": taskInfo.Task.Value, "attachResults": attachResults,
+				}).Error("nil returned for CnsVolumeAttachResult")
+				break
+			}
+			attachRes := res.Value.(cnstypes.CnsVolumeAttachResult)
 			log.WithFields(log.Fields{
 				"host": m.virtualCenter.Config.Host, "taskID": taskInfo.Task.Value,
 				"volumeID": attachRes.DiskUUID,
@@ -185,7 +197,7 @@ func (m *defaultManager) AttachVolume(spec *types.AttachDetachSpec) (string, err
 		}
 	}
 	log.WithFields(log.Fields{
-		"host": m.virtualCenter.Config.Host, "taskID": taskInfo.Task.Value,
+		"host": m.virtualCenter.Config.Host, "taskID": taskInfo.Task.Value, "attachResults": attachResults,
 	}).Error("unable to find the task result for AttachVolume task")
 	return "", fmt.Errorf("Unable to find the taskresult for AttachVolume task: %s on vc: %s",
 		taskInfo.Task.Value, m.virtualCenter.Config.Host)
@@ -359,11 +371,54 @@ func (m *defaultManager) GetVolumeInfo(spec *types.QuerySpec) (bool, error) {
 }
 
 // VolumesAreAttached checks if a list disks are attached to the given node.
-func (m *defaultManager) VolumesAreAttached(nm node.Manager, nodeVolumes map[string][]*types.VolumeID) (map[string]map[*types.VolumeID]bool, error) {
-	// TODO: Verify if volumes are attached by querying VC.
+func (m *defaultManager) VolumesAreAttached(nodeMgr node.Manager, nodeVolumes map[string][]*types.VolumeID) (map[string]map[*types.VolumeID]bool, error) {
 	err := validateManager(m)
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	// Create context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Contains node-Volumes-IsAttached mapping
+	disksAttached := make(map[string]map[*types.VolumeID]bool)
+	// Return empty list if nodeVolumes is empty
+	if len(nodeVolumes) == 0 {
+		log.Error("Node Volumes are empty")
+		return disksAttached, nil
+	}
+	nodesToRetry, err := volumesAreAttached(ctx, nodeMgr, nodeVolumes, disksAttached, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(nodesToRetry) != 0 {
+		remainingNodesVolumes := make(map[string][]*types.VolumeID)
+		// Rediscover nodes which are need to be retried
+		for _, nodeName := range nodesToRetry {
+			err = nodeMgr.DiscoverNode(nodeName)
+			if err != nil {
+				if err == cnsvsphere.ErrNoVMFound {
+					log.WithFields(log.Fields{"node": nodeName, "err": err}).Error("Node not found")
+					continue
+				}
+				log.WithFields(log.Fields{"node": nodeName, "err": err}).Error("Failed to rediscover node")
+				return nil, err
+			}
+			remainingNodesVolumes[nodeName] = nodeVolumes[nodeName]
+		}
+		// Check if the volumes are attached for rediscovered nodes
+		if len(remainingNodesVolumes) != 0 {
+			log.WithFields(log.Fields{"remainingNodesVolumes": remainingNodesVolumes}).
+				Info("Nodes that needs to be retried after rediscovery")
+			nodesToRetry, err = volumesAreAttached(ctx, nodeMgr, remainingNodesVolumes, disksAttached, true)
+			if err != nil || len(nodesToRetry) != 0 {
+				log.WithFields(log.Fields{"remainingNodesVolumes": remainingNodesVolumes, "err": err}).
+					Error("Failed to retry volumesAreAttached for rediscovered nodes")
+				return nil, err
+			}
+		}
+		log.WithFields(log.Fields{"nodeVolumes": nodeVolumes,
+			"disksAttached": disksAttached, "err": err}).
+			Info("DisksAreAttach successfully executed")
+	}
+	return disksAttached, nil
 }

@@ -28,13 +28,13 @@ type CnsCreateVolumeRequestType struct {
 }
 
 func init() {
-	types.Add("vsan:CnsCreateVolumeRequestType", reflect.TypeOf((*CnsCreateVolumeRequestType)(nil)).Elem())
+	types.Add("CnsCreateVolumeRequestType", reflect.TypeOf((*CnsCreateVolumeRequestType)(nil)).Elem())
 }
 
 type CnsCreateVolume CnsCreateVolumeRequestType
 
 func init() {
-	types.Add("vsan:CnsCreateVolume", reflect.TypeOf((*CnsCreateVolume)(nil)).Elem())
+	types.Add("CnsCreateVolume", reflect.TypeOf((*CnsCreateVolume)(nil)).Elem())
 }
 
 type CnsCreateVolumeResponse struct {
@@ -49,7 +49,7 @@ type CnsVolumeBaseSpec struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeBaseSpec", reflect.TypeOf((*CnsVolumeBaseSpec)(nil)).Elem())
+	types.Add("CnsVolumeBaseSpec", reflect.TypeOf((*CnsVolumeBaseSpec)(nil)).Elem())
 }
 
 type CnsVolumeCreateSpec struct {
@@ -61,7 +61,7 @@ type CnsVolumeCreateSpec struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeCreateSpec", reflect.TypeOf((*CnsVolumeCreateSpec)(nil)).Elem())
+	types.Add("CnsVolumeCreateSpec", reflect.TypeOf((*CnsVolumeCreateSpec)(nil)).Elem())
 }
 
 type CnsUpdateVolumeRequestType struct {
@@ -70,13 +70,13 @@ type CnsUpdateVolumeRequestType struct {
 }
 
 func init() {
-	types.Add("vsan:CnsUpdateVolumeRequestType", reflect.TypeOf((*CnsUpdateVolumeRequestType)(nil)).Elem())
+	types.Add("CnsUpdateVolumeRequestType", reflect.TypeOf((*CnsUpdateVolumeRequestType)(nil)).Elem())
 }
 
 type CnsUpdateVolume CnsUpdateVolumeRequestType
 
 func init() {
-	types.Add("vsan:CnsUpdateVolume", reflect.TypeOf((*CnsUpdateVolume)(nil)).Elem())
+	types.Add("CnsUpdateVolume", reflect.TypeOf((*CnsUpdateVolume)(nil)).Elem())
 }
 
 type CnsUpdateVolumeResponse struct {
@@ -90,7 +90,7 @@ type CnsVolumeUpdateSpec struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeUpdateSpec", reflect.TypeOf((*CnsVolumeUpdateSpec)(nil)).Elem())
+	types.Add("CnsVolumeUpdateSpec", reflect.TypeOf((*CnsVolumeUpdateSpec)(nil)).Elem())
 }
 
 type CnsDeleteVolumeRequestType struct {
@@ -99,13 +99,13 @@ type CnsDeleteVolumeRequestType struct {
 }
 
 func init() {
-	types.Add("vsan:CnsDeleteVolumeRequestType", reflect.TypeOf((*CnsDeleteVolumeRequestType)(nil)).Elem())
+	types.Add("CnsDeleteVolumeRequestType", reflect.TypeOf((*CnsDeleteVolumeRequestType)(nil)).Elem())
 }
 
 type CnsDeleteVolume CnsDeleteVolumeRequestType
 
 func init() {
-	types.Add("vsan:CnsDeleteVolume", reflect.TypeOf((*CnsDeleteVolume)(nil)).Elem())
+	types.Add("CnsDeleteVolume", reflect.TypeOf((*CnsDeleteVolume)(nil)).Elem())
 }
 
 type CnsDeleteVolumeResponse struct {
@@ -118,13 +118,13 @@ type CnsAttachVolumeRequestType struct {
 }
 
 func init() {
-	types.Add("vsan:CnsAttachVolumeRequestType", reflect.TypeOf((*CnsAttachVolumeRequestType)(nil)).Elem())
+	types.Add("CnsAttachVolumeRequestType", reflect.TypeOf((*CnsAttachVolumeRequestType)(nil)).Elem())
 }
 
 type CnsAttachVolume CnsAttachVolumeRequestType
 
 func init() {
-	types.Add("vsan:CnsAttachVolume", reflect.TypeOf((*CnsAttachVolume)(nil)).Elem())
+	types.Add("CnsAttachVolume", reflect.TypeOf((*CnsAttachVolume)(nil)).Elem())
 }
 
 type CnsAttachVolumeResponse struct {
@@ -137,13 +137,13 @@ type CnsDetachVolumeRequestType struct {
 }
 
 func init() {
-	types.Add("vsan:CnsDetachVolumeRequestType", reflect.TypeOf((*CnsDetachVolumeRequestType)(nil)).Elem())
+	types.Add("CnsDetachVolumeRequestType", reflect.TypeOf((*CnsDetachVolumeRequestType)(nil)).Elem())
 }
 
 type CnsDetachVolume CnsDetachVolumeRequestType
 
 func init() {
-	types.Add("vsan:CnsDetachVolume", reflect.TypeOf((*CnsDetachVolume)(nil)).Elem())
+	types.Add("CnsDetachVolume", reflect.TypeOf((*CnsDetachVolume)(nil)).Elem())
 }
 
 type CnsDetachVolumeResponse struct {
@@ -158,7 +158,7 @@ type CnsVolumeAttachDetachSpec struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeAttachDetachSpec", reflect.TypeOf((*CnsVolumeAttachDetachSpec)(nil)).Elem())
+	types.Add("CnsVolumeAttachDetachSpec", reflect.TypeOf((*CnsVolumeAttachDetachSpec)(nil)).Elem())
 }
 
 type CnsQueryVolume CnsQueryVolumeRequestType
@@ -208,7 +208,7 @@ type CnsContainerCluster struct {
 }
 
 func init() {
-	types.Add("vsan:CnsContainerCluster", reflect.TypeOf((*CnsContainerCluster)(nil)).Elem())
+	types.Add("CnsContainerCluster", reflect.TypeOf((*CnsContainerCluster)(nil)).Elem())
 }
 
 type CnsVolume struct {
@@ -224,7 +224,7 @@ type CnsVolume struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolume", reflect.TypeOf((*CnsVolume)(nil)).Elem())
+	types.Add("CnsVolume", reflect.TypeOf((*CnsVolume)(nil)).Elem())
 }
 
 type CnsVolumeOperationResult struct {
@@ -235,7 +235,7 @@ type CnsVolumeOperationResult struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeOperationResult", reflect.TypeOf((*CnsVolumeOperationResult)(nil)).Elem())
+	types.Add("CnsVolumeOperationResult", reflect.TypeOf((*CnsVolumeOperationResult)(nil)).Elem())
 }
 
 type CnsVolumeOperationBatchResult struct {
@@ -245,7 +245,7 @@ type CnsVolumeOperationBatchResult struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeOperationBatchResult", reflect.TypeOf((*CnsVolumeOperationBatchResult)(nil)).Elem())
+	types.Add("CnsVolumeOperationBatchResult", reflect.TypeOf((*CnsVolumeOperationBatchResult)(nil)).Elem())
 }
 
 type CnsVolumeCreateResult struct {
@@ -256,7 +256,7 @@ type CnsVolumeCreateResult struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeCreateResult", reflect.TypeOf((*CnsVolumeCreateResult)(nil)).Elem())
+	types.Add("CnsVolumeCreateResult", reflect.TypeOf((*CnsVolumeCreateResult)(nil)).Elem())
 }
 
 type CnsVolumeAttachResult struct {
@@ -266,7 +266,7 @@ type CnsVolumeAttachResult struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeAttachResult", reflect.TypeOf((*CnsVolumeAttachResult)(nil)).Elem())
+	types.Add("CnsVolumeAttachResult", reflect.TypeOf((*CnsVolumeAttachResult)(nil)).Elem())
 }
 
 type CnsVolumeId struct {
@@ -277,7 +277,7 @@ type CnsVolumeId struct {
 }
 
 func init() {
-	types.Add("vsan:CnsVolumeId", reflect.TypeOf((*CnsVolumeId)(nil)).Elem())
+	types.Add("CnsVolumeId", reflect.TypeOf((*CnsVolumeId)(nil)).Elem())
 }
 
 type CnsBackingObjectDetails struct {
@@ -288,7 +288,7 @@ type CnsBackingObjectDetails struct {
 }
 
 func init() {
-	types.Add("vsan:CnsBackingObjectDetails", reflect.TypeOf((*CnsBackingObjectDetails)(nil)).Elem())
+	types.Add("CnsBackingObjectDetails", reflect.TypeOf((*CnsBackingObjectDetails)(nil)).Elem())
 }
 
 type CnsBlockBackingDetails struct {
@@ -298,7 +298,7 @@ type CnsBlockBackingDetails struct {
 }
 
 func init() {
-	types.Add("vsan:CnsBlockBackingDetails", reflect.TypeOf((*CnsBlockBackingDetails)(nil)).Elem())
+	types.Add("CnsBlockBackingDetails", reflect.TypeOf((*CnsBlockBackingDetails)(nil)).Elem())
 }
 
 type CnsQueryFilter struct {
@@ -315,7 +315,7 @@ type CnsQueryFilter struct {
 }
 
 func init() {
-	types.Add("vsan:CnsQueryFilter", reflect.TypeOf((*CnsQueryFilter)(nil)).Elem())
+	types.Add("CnsQueryFilter", reflect.TypeOf((*CnsQueryFilter)(nil)).Elem())
 }
 
 type CnsQueryResult struct {
@@ -326,7 +326,7 @@ type CnsQueryResult struct {
 }
 
 func init() {
-	types.Add("vsan:CnsQueryResult", reflect.TypeOf((*CnsQueryResult)(nil)).Elem())
+	types.Add("CnsQueryResult", reflect.TypeOf((*CnsQueryResult)(nil)).Elem())
 }
 
 type CnsCursor struct {
@@ -338,7 +338,7 @@ type CnsCursor struct {
 }
 
 func init() {
-	types.Add("vsan:CnsCursor", reflect.TypeOf((*CnsCursor)(nil)).Elem())
+	types.Add("CnsCursor", reflect.TypeOf((*CnsCursor)(nil)).Elem())
 }
 
 type CnsFault struct {
@@ -346,11 +346,5 @@ type CnsFault struct {
 }
 
 func init() {
-	types.Add("vsan:CnsFault", reflect.TypeOf((*CnsFault)(nil)).Elem())
-}
-
-type CnsFaultFault BaseCnsFault
-
-func init() {
-	types.Add("vsan:CnsFaultFault", reflect.TypeOf((*CnsFaultFault)(nil)).Elem())
+	types.Add("CnsFault", reflect.TypeOf((*CnsFault)(nil)).Elem())
 }

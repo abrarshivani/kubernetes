@@ -385,6 +385,8 @@ func (v *vsphereVolumeProvisioner) Provision(selectedNode *v1.Node, allowedTopol
 					FSType:            volSpec.Fstype,
 					StoragePolicyName: volSpec.StoragePolicyName,
 					StoragePolicyID:   volSpec.StoragePolicyID,
+					VolumeID:          volSpec.VolumeID,
+					DatastoreURL:      volSpec.DatastoreURL,
 				},
 			},
 			MountOptions: v.options.MountOptions,

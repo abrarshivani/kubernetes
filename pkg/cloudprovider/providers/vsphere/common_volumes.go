@@ -7,8 +7,9 @@ import (
 )
 
 type VolumeID struct {
-	ID           string
-	DatastoreURL string
+	ID           string // For CSP
+	DatastoreURL string // For CSP
+	VolumePath   string // For VCP
 }
 
 type AttachVolumeSpec struct {
