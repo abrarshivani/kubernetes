@@ -71,6 +71,9 @@ func (plugin *vsphereVolumePlugin) GetVolumeName(spec *volume.Spec) (string, err
 		return "", err
 	}
 
+	if volumeSource.VolumePath == "" {
+		return volumeSource.VolumeID, nil
+	}
 	return volumeSource.VolumePath, nil
 }
 

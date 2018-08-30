@@ -86,7 +86,9 @@ func (attacher *vsphereVMDKAttacher) Attach(spec *volume.Spec, nodeName types.No
 	// succeeds in that case, so no need to do that separately.
 	diskUUID, err := attacher.vsphereVolumes.AttachVSphereVolume(&vsphere.AttachVolumeSpec{
 		VolID: vsphere.VolumeID{
-			ID: volumeSource.VolumePath,
+			ID: volumeSource.VolumeID,
+			DatastoreURL: volumeSource.DatastoreURL,
+			VolumePath: volumeSource.VolumePath,
 		},
 		StoragePolicyName: volumeSource.StoragePolicyName,
 		NodeName:          nodeName,

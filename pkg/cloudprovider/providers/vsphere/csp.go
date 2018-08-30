@@ -87,7 +87,12 @@ func (csp *CSP) NodeAdded(obj interface{}) {
 	}
 
 	glog.V(4).Infof("Node added: %+v", node)
-	csp.nodeManager.RegisterNode(node.Name, nil)
+	nodeUUID, err := GetNodeUUID(node)
+	if err != nil {
+		glog.Errorf("Failed to get node uuid for node %s with error: %+v", node.Name, err)
+		return
+	}
+	csp.nodeManager.RegisterNode(nodeUUID, node.Name, nil)
 }
 
 // Notification handler when node is removed from k8s cluster.
@@ -217,7 +222,7 @@ func (csp *CSP) InstanceExistsByProviderID(ctx context.Context, providerID strin
 // InstanceID returns the cloud provider ID of the node with the specified Name.
 func (csp *CSP) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (string, error) {
 	instanceIDInternal := func() (string, error) {
-		if csp.vmUUID == convertToString(nodeName) {
+		if csp.hostName == convertToString(nodeName) {
 			return csp.vmUUID, nil
 		}
 
@@ -229,7 +234,7 @@ func (csp *CSP) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (str
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		vm, err := csp.nodeManager.GetNode(convertToString(nodeName))
+		vm, err := csp.nodeManager.GetNodeByName(convertToString(nodeName))
 		if err != nil {
 			if err == cspvsphere.ErrVMNotFound {
 				return "", cloudprovider.InstanceNotFound
@@ -263,7 +268,7 @@ func (csp *CSP) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName) (
 		return nil, cloudprovider.InstanceNotFound
 	}
 
-	vm, err := csp.nodeManager.GetNode(convertToString(nodeName))
+	vm, err := csp.nodeManager.GetNodeByName(convertToString(nodeName))
 	if err != nil {
 		glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
 		return nil, err
@@ -311,7 +316,7 @@ func (csp *CSP) NodeAddressesByProviderID(ctx context.Context, providerID string
 
 // CurrentNodeName gives the current node name
 func (csp *CSP) CurrentNodeName(ctx context.Context, hostname string) (k8stypes.NodeName, error) {
-	return convertToK8sType(csp.vmUUID), nil
+	return convertToK8sType(csp.hostName), nil
 }
 
 func RegisterVirtualCenters(vsphereInstanceMap map[string]*VSphereInstance,
@@ -420,7 +425,7 @@ func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (diskUUID string, er
 	nodeName := spec.NodeName
 	volID := spec.VolID
 	glog.V(3).Infof("vSphere Cloud Provider attaching disk %+v on node %s", volID, nodeName)
-	node, err := csp.nodeManager.GetNode(convertToString(nodeName))
+	node, err := csp.nodeManager.GetNodeByName(convertToString(nodeName))
 	if err != nil {
 		glog.Errorf("Cannot get node %s from nodemanager for attaching disk %+v with error %+v",
 			nodeName, volID, err)
@@ -431,35 +436,35 @@ func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (diskUUID string, er
 		glog.Errorf("Cannot get virtual center %s from vitualcentermanager for attaching disk %+v with error %+v", node.VirtualCenterHost, volID.ID, err)
 		return "", err
 	}
-	volumeID, datastoreURL := GetVolumeIDAndDatastoreURL(volID.ID)
 	// Statically provisioned volume
 	// TODO: Replace it with GetVolumeInfo CNS API once available
 	if v1helper.GetPersistentVolumeClass(spec.PV) == "" {
 		glog.V(4).Infof("Volume %v is provisioned statically", volID)
 		createSpec := &cspvolumestypes.CreateSpec{
-			Name: volumeID + "#" + datastoreURL,
+			Name: volID.ID,
 			ContainerCluster: cspvolumestypes.ContainerCluster{
 				ClusterID:   csp.cfg.Global.ClusterID,
 				ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
 			},
-			DatastoreURLs: []string{datastoreURL},
-			BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: volumeID},
+			DatastoreURLs: []string{volID.DatastoreURL},
+			BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: volID.ID},
 		}
 		csp.volumeManager.CreateVolume(createSpec)
 	}
 	attachSpec := &cspvolumestypes.AttachDetachSpec{
 		VolumeID: &cspvolumestypes.VolumeID{
-			ID:           volumeID,
-			DatastoreURL: datastoreURL,
+			ID:           volID.ID,
+			DatastoreURL: volID.DatastoreURL,
 		},
 		VirtualMachine: node,
 	}
 	glog.V(5).Infof("vSphere Cloud Provider attaching volume %s with attach spec %+v", volID.ID, attachSpec)
 	diskUUID, err = cspvolumes.GetManager(vc).AttachVolume(attachSpec)
 	if err != nil {
-		glog.Errorf("Failed to attach disk %s with err %+v", volumeID, err)
+		glog.Errorf("Failed to attach disk %+v with err %+v", volID, err)
 		return "", err
 	}
+	glog.V(5).Infof("Attached DiskUUID %s to node %s", diskUUID, nodeName)
 	return diskUUID, nil
 }
 
@@ -468,7 +473,7 @@ func (csp *CSP) DetachVSphereVolume(spec *DetachVolumeSpec) error {
 	nodeName := spec.NodeName
 	// TODO: Modify vmdiskPath to all input options in the log next line.
 	glog.V(3).Infof("vSphere Cloud Provider detaching disk %+v from node %s", spec.VolID, nodeName)
-	node, err := csp.nodeManager.GetNode(convertToString(nodeName))
+	node, err := csp.nodeManager.GetNodeByName(convertToString(nodeName))
 	if err != nil {
 		glog.Errorf("Cannot get node %s from nodemanager for detaching disk %+v with error %+v",
 			nodeName, spec.VolID, err)
