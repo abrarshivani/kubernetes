@@ -32,8 +32,8 @@ var (
 
 // Manager provides functionality to manage nodes.
 type Manager interface {
-	// RegisterNode registers a node given its UUID and Metadata.
-	RegisterNode(nodeUUID string, metadata Metadata) error
+	// RegisterNode registers a node given its UUID, name and Metadata.
+	RegisterNode(nodeUUID string, nodeName string, metadata Metadata) error
 	// DiscoverNode discovers a registered node given its UUID. This method
 	// scans all virtual centers registered on the VirtualCenterManager for a
 	// virtual machine with the given UUID.
@@ -45,12 +45,15 @@ type Manager interface {
 	// GetNode refreshes and returns the VirtualMachine for a registered node
 	// given its UUID.
 	GetNode(nodeUUID string) (*vsphere.VirtualMachine, error)
+	// GetNodeByName refreshes and returns the VirtualMachine for a registered node
+	// given its name.
+	GetNodeByName(nodeName string) (*vsphere.VirtualMachine, error)
 	// GetAllNodes refreshes and returns VirtualMachine for all registered
 	// nodes. If nodes are added or removed concurrently, they may or may not be
 	// reflected in the result of a call to this method.
 	GetAllNodes() ([]*vsphere.VirtualMachine, error)
-	// UnregisterNode unregisters a registered node given its UUID.
-	UnregisterNode(nodeUUID string) error
+	// UnregisterNode unregisters a registered node given its name.
+	UnregisterNode(nodeName string) error
 }
 
 // Metadata represents node metadata.
@@ -82,9 +85,11 @@ type defaultManager struct {
 	nodeVMs sync.Map
 	// nodeMetadata maps node UUIDs to generic metadata.
 	nodeMetadata sync.Map
+	// node name to node UUI map.
+	nodeNameToUUID sync.Map
 }
 
-func (m *defaultManager) RegisterNode(nodeUUID string, metadata Metadata) error {
+func (m *defaultManager) RegisterNode(nodeUUID string, nodeName string, metadata Metadata) error {
 	if _, exists := m.nodeMetadata.Load(nodeUUID); exists {
 		log.WithFields(log.Fields{
 			"nodeUUID": nodeUUID, "metadata": metadata,
@@ -93,6 +98,7 @@ func (m *defaultManager) RegisterNode(nodeUUID string, metadata Metadata) error 
 	}
 
 	m.nodeMetadata.Store(nodeUUID, metadata)
+	m.nodeNameToUUID.Store(nodeName, nodeUUID)
 	log.WithFields(log.Fields{
 		"nodeUUID": nodeUUID, "metadata": metadata,
 	}).Error("Successfully registered node")
@@ -143,6 +149,14 @@ func (m *defaultManager) GetAllNodeMetadata() []Metadata {
 	return nodeMetadata
 }
 
+func (m *defaultManager) GetNodeByName(nodeName string) (*vsphere.VirtualMachine, error) {
+	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
+	if !found {
+		log.WithField("nodeName", nodeName).Error("Node not found")
+		return nil, ErrNodeNotFound
+	}
+	return m.GetNode(nodeUUID.(string))
+}
 func (m *defaultManager) GetNode(nodeUUID string) (*vsphere.VirtualMachine, error) {
 	vmInf, discovered := m.nodeVMs.Load(nodeUUID)
 	if !discovered {
@@ -230,16 +244,21 @@ func (m *defaultManager) GetAllNodes() ([]*vsphere.VirtualMachine, error) {
 	return vms, nil
 }
 
-func (m *defaultManager) UnregisterNode(nodeUUID string) error {
-	if _, err := m.GetNodeMetadata(nodeUUID); err != nil {
+func (m *defaultManager) UnregisterNode(nodeName string) error {
+	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
+	if !found {
+		log.WithField("nodeName", nodeName).Error("Node not found")
+		return ErrNodeNotFound
+	}
+	if _, err := m.GetNodeMetadata(nodeUUID.(string)); err != nil {
 		log.WithFields(log.Fields{
 			"nodeUUID": nodeUUID, "err": err,
 		}).Error("Node wasn't found, failed to unregister")
 		return err
 	}
-
+	m.nodeNameToUUID.Delete(nodeName)
 	m.nodeMetadata.Delete(nodeUUID)
 	m.nodeVMs.Delete(nodeUUID)
-	log.WithField("nodeUUID", nodeUUID).Info("Successfully unregistered node")
+	log.WithField("nodeName", nodeUUID).Info("Successfully unregistered node")
 	return nil
 }

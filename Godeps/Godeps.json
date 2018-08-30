@@ -3269,27 +3269,27 @@
 		},
 		{
 			"ImportPath": "gitlab.eng.vmware.com/hatchway/common-csp/cns/methods",
-			"Rev": "2ea84f03a4388182c250f2772dff69920b274ece"
+			"Rev": "2b4fbc84933f257bcc4a7c34573e59e6da690052"
 		},
 		{
 			"ImportPath": "gitlab.eng.vmware.com/hatchway/common-csp/cns/types",
-			"Rev": "2ea84f03a4388182c250f2772dff69920b274ece"
+			"Rev": "2b4fbc84933f257bcc4a7c34573e59e6da690052"
 		},
 		{
 			"ImportPath": "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node",
-			"Rev": "2ea84f03a4388182c250f2772dff69920b274ece"
+			"Rev": "2b4fbc84933f257bcc4a7c34573e59e6da690052"
 		},
 		{
 			"ImportPath": "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume",
-			"Rev": "2ea84f03a4388182c250f2772dff69920b274ece"
+			"Rev": "2b4fbc84933f257bcc4a7c34573e59e6da690052"
 		},
 		{
 			"ImportPath": "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume/types",
-			"Rev": "2ea84f03a4388182c250f2772dff69920b274ece"
+			"Rev": "2b4fbc84933f257bcc4a7c34573e59e6da690052"
 		},
 		{
 			"ImportPath": "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere",
-			"Rev": "2ea84f03a4388182c250f2772dff69920b274ece"
+			"Rev": "2b4fbc84933f257bcc4a7c34573e59e6da690052"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/bcrypt",
