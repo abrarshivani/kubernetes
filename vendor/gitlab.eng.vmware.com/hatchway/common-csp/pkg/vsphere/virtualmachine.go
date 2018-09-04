@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/property"
+	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 )
 
@@ -61,6 +63,44 @@ func (vm *VirtualMachine) IsActive(ctx context.Context) (bool, error) {
 func (vm *VirtualMachine) renew(vc *VirtualCenter) {
 	vm.VirtualMachine = object.NewVirtualMachine(vc.Client.Client, vm.VirtualMachine.Reference())
 	vm.Datacenter.Datacenter = object.NewDatacenter(vc.Client.Client, vm.Datacenter.Reference())
+}
+
+// GetAllAccessibleDatastores gets the list of accessible Datastores for the given Virtual Machine
+func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*DatastoreInfo, error) {
+	host, err := vm.HostSystem(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{"vm": vm.InventoryPath, "err": err}).Error("Failed to get host system for VM")
+		return nil, err
+	}
+	var hostSystemMo mo.HostSystem
+	s := object.NewSearchIndex(vm.Client())
+	err = s.Properties(ctx, host.Reference(), []string{"datastore"}, &hostSystemMo)
+	if err != nil {
+		log.WithFields(log.Fields{"host": host, "err": err}).Error("Failed to retrieve datastores for host")
+		return nil, err
+	}
+	var dsRefList []types.ManagedObjectReference
+	for _, dsRef := range hostSystemMo.Datastore {
+		dsRefList = append(dsRefList, dsRef)
+	}
+
+	var dsMoList []mo.Datastore
+	pc := property.DefaultCollector(vm.Client())
+	properties := []string{"info"}
+	err = pc.Retrieve(ctx, dsRefList, properties, &dsMoList)
+	if err != nil {
+		log.WithFields(log.Fields{"dsObjList": dsRefList, "properties": properties, "err": err}).Error("Failed to get Datastore managed objects from datastore objects")
+		return nil, err
+	}
+	var dsObjList []*DatastoreInfo
+	for _, dsMo := range dsMoList {
+		dsObjList = append(dsObjList,
+			&DatastoreInfo{
+				&Datastore{object.NewDatastore(vm.Client(), dsMo.Reference()),
+					vm.Datacenter},
+				dsMo.Info.GetDatastoreInfo()})
+	}
+	return dsObjList, nil
 }
 
 // Renew renews the virtual machine and datacenter information. If reconnect is

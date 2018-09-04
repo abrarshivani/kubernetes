@@ -220,7 +220,13 @@ func (vc *VirtualCenter) BulkQueryCompliance(ctx context.Context, profileFCDsMap
 }
 
 // GetStoragePolicyIDByName gets storage policy ID by name.
-func (vc *VirtualCenter) GetStoragePolicyIDByName(storagePolicyID string) (string, error) {
-	// TODO: Call PBM API to get Storage Policy ID by name.
-	return "", nil
+func (vc *VirtualCenter) GetStoragePolicyIDByName(ctx context.Context, storagePolicyName string) (string, error) {
+	storagePolicyId, err := vc.PbmClient.ProfileIDByName(ctx, storagePolicyName)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"storagePolicyName": storagePolicyName, "err": err,
+		}).Error("Failed to get StoragePolicyID from StoragePolicyName")
+		return "", err
+	}
+	return storagePolicyId, nil
 }

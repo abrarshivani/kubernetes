@@ -80,7 +80,13 @@ func (m *defaultManager) CreateVolume(spec *types.CreateSpec) (*types.VolumeID, 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Set up the VC connection
-	m.virtualCenter.Connect(ctx)
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Failed to connect to Virtual Center")
+		return nil, err
+	}
 	// Construct the CNS VolumeCreateSpec list
 	var cnsCreateSpecList []cnstypes.CnsVolumeCreateSpec
 	cnsCreateSpec := constructCnsCreateSpecList(spec)
@@ -145,7 +151,13 @@ func (m *defaultManager) AttachVolume(spec *types.AttachDetachSpec) (string, err
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Set up the VC connection
-	m.virtualCenter.Connect(ctx)
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Failed to connect to Virtual Center")
+		return "", err
+	}
 	// Construct the CNS AttachSpec list
 	var cnsAttachSpecList []cnstypes.CnsVolumeAttachDetachSpec
 	cnsAttachSpec := cnstypes.CnsVolumeAttachDetachSpec{
@@ -212,7 +224,13 @@ func (m *defaultManager) DetachVolume(spec *types.AttachDetachSpec) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Set up the VC connection
-	m.virtualCenter.Connect(ctx)
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Failed to connect to Virtual Center")
+		return err
+	}
 	// Construct the CNS DetachSpec list
 	var cnsDetachSpecList []cnstypes.CnsVolumeAttachDetachSpec
 	cnsDetachSpec := cnstypes.CnsVolumeAttachDetachSpec{
@@ -259,7 +277,13 @@ func (m *defaultManager) DeleteVolume(spec *types.DeleteSpec) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Set up the VC connection
-	m.virtualCenter.Connect(ctx)
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Failed to connect to Virtual Center")
+		return err
+	}
 	// Construct the CNS VolumeId list
 	var cnsVolumeIDList []cnstypes.CnsVolumeId
 	cnsVolumeID := cnstypes.CnsVolumeId{
@@ -303,7 +327,13 @@ func (m *defaultManager) UpdateVolume(spec *types.UpdateSpec) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Set up the VC connection
-	m.virtualCenter.Connect(ctx)
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Failed to connect to Virtual Center")
+		return err
+	}
 	// Construct the CNS UpdateSpec list
 	var cnsUpdateSpecList []cnstypes.CnsVolumeUpdateSpec
 	cnsVolumeBaseSpec := cnstypes.CnsVolumeBaseSpec{}
@@ -396,7 +426,7 @@ func (m *defaultManager) VolumesAreAttached(nodeMgr node.Manager, nodeVolumes ma
 		for _, nodeName := range nodesToRetry {
 			err = nodeMgr.DiscoverNode(nodeName)
 			if err != nil {
-				if err == cnsvsphere.ErrNoVMFound {
+				if err == node.ErrNodeNotFound {
 					log.WithFields(log.Fields{"node": nodeName, "err": err}).Error("Node not found")
 					continue
 				}

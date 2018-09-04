@@ -361,7 +361,7 @@ func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 
 	var datastore string
 	var datastoreUrl string
-	// If datastore not specified, then use default datastore
+	// If datastore not specified in the storage class, then use default datastore
 	if spec.Datastore == "" {
 		datastore = csp.cfg.Workspace.DefaultDatastore
 	} else {
@@ -370,35 +370,70 @@ func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 	datastore = strings.TrimSpace(datastore)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	datacenter, err := vc.GetDatacenter(ctx, csp.cfg.Workspace.Datacenter)
+
+	if spec.StoragePolicyName != "" {
+		// Get Storage Policy ID from Storage Policy Name
+		err := vc.ConnectPbm(ctx)
+		if err != nil {
+			glog.Errorf("Error occurred while connecting to PBM, err: %+v", err)
+			return VolumeID{}, err
+		}
+		spec.StoragePolicyID, err = vc.GetStoragePolicyIDByName(ctx, spec.StoragePolicyName)
+		if err != nil {
+			glog.Errorf("Error occurred while getting Profile Id from Profile Name: %s, err: %+v", spec.StoragePolicyName, err)
+			return VolumeID{}, err
+		}
+	}
+	var sharedDatastoreURLs []string
+	sharedDatastoreURLs, err = GetSharedDatastoresInK8SCluster(ctx, csp.nodeManager)
 	if err != nil {
-		glog.Errorf("Failed to find Datacenter:%+v from VC: %+v, Error: %+v", csp.cfg.Workspace.Datacenter, csp.cfg.Workspace.VCenterIP, err)
+		glog.Errorf("Failed to get shared datastores In K8S Cluster. Error: %+v", err)
 		return VolumeID{}, err
 	}
-	datastoreObj, err := datacenter.GetDatastoreByName(ctx, datastore)
-	if err != nil {
-		glog.Errorf("Failed to find Datastore:%+v in Datacenter:%+v from VC:%+v, Error: %+v", datastore, csp.cfg.Workspace.Datacenter, csp.cfg.Workspace.VCenterIP, err)
-		return VolumeID{}, err
+
+	var datastoreURLs []string
+	if spec.StoragePolicyID != "" && spec.Datastore == "" || datastore == "" {
+		// Pass list of all shared datastore URLs for following cases.
+		// 1. SPBM Policy is specified but datastore is not specified in
+		// the storage class.
+		// 2. Datastore is not specified in the storage class as well as
+		// in the cloud provider configuration file.
+		datastoreURLs = sharedDatastoreURLs
+	} else {
+		datacenter, err := vc.GetDatacenter(ctx, csp.cfg.Workspace.Datacenter)
+		if err != nil {
+			glog.Errorf("Failed to find Datacenter:%+v from VC: %+v, Error: %+v", csp.cfg.Workspace.Datacenter, csp.cfg.Workspace.VCenterIP, err)
+			return VolumeID{}, err
+		}
+		datastoreObj, err := datacenter.GetDatastoreByName(ctx, datastore)
+		if err != nil {
+			glog.Errorf("Failed to find Datastore:%+v in Datacenter:%+v from VC:%+v, Error: %+v", datastore, csp.cfg.Workspace.Datacenter, csp.cfg.Workspace.VCenterIP, err)
+			return VolumeID{}, err
+		}
+		datastoreUrl, err = datastoreObj.GetDatatoreUrl(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get URL for the datastore:%+v , Error: %+v", datastore, err)
+			return VolumeID{}, err
+		}
+		isSharedDatastoreURL := false
+		for _, url := range sharedDatastoreURLs {
+			if url == datastoreUrl {
+				isSharedDatastoreURL = true
+				break
+			}
+		}
+		if isSharedDatastoreURL {
+			datastoreURLs = append(datastoreURLs, datastoreUrl)
+		} else {
+			errMsg := fmt.Sprintf("Datastore: %v is not accessible to all nodes.", datastore)
+			glog.Errorf(errMsg)
+			return VolumeID{}, err
+		}
 	}
-	datastoreUrl, err = datastoreObj.GetDatatoreUrl(ctx)
-	if err != nil {
-		glog.Errorf("Failed to get URL for the datastore:%+v , Error: %+v", datastore, err)
-		return VolumeID{}, err
-	}
-	// TODO:
-	// 1. Make sure datastore is shared across all Kubernetes nodes.
-	// 2. Compute storagepolicyID from storagepolicyName
-	// 3. And handle following cases.
-	//    * If SPBM Policy and datastore is specified in the SC, Pass URL of datastore specified in the SC in CreateSpec.
-	//		(For this case if datastore is not compatible, server should fail provisioning volume)
-	//    * If SPBM Policy is passed in the SC but datastore is not specified in the SC, Pass list of all shared datastores URLs to the spec.
-	//		(For this case, server should select compatible datastore with maximum available space)
-	//    * If no policy is specified and no datastore is specified in either SC or vsphere.conf, pass list of all shared datastore URL.
-	//    (For this case, server should select datastore with maximum available space)
 
 	createSpec := &cspvolumestypes.CreateSpec{
 		Name:          spec.Name,
-		DatastoreURLs: []string{datastoreUrl},
+		DatastoreURLs: datastoreURLs,
 		BackingInfo: &cspvolumestypes.BlockBackingInfo{
 			BackingObjectInfo: cspvolumestypes.BackingObjectInfo{
 				StoragePolicyID: spec.StoragePolicyID,
@@ -612,4 +647,50 @@ func AddPrefixToLabels(prefix string, labels map[string]string) map[string]strin
 		prefixedLabels[prefixedKey] = labelValue
 	}
 	return prefixedLabels
+}
+
+func GetSharedDatastoresInK8SCluster(ctx context.Context, nodeManager nodemanager.Manager) ([]string, error) {
+	var datastoreURLs []string
+	nodeVMs, err := nodeManager.GetAllNodes()
+	if err != nil {
+		glog.Errorf("Failed to get Nodes from nodeManager with err %+v", err)
+		return nil, err
+	}
+	if len(nodeVMs) == 0 {
+		errMsg := fmt.Sprintf("Empty List of Node VMs returned from nodeManager")
+		glog.Errorf(errMsg)
+		return make([]string, 0), fmt.Errorf(errMsg)
+	}
+	var sharedDatastores []*cspvsphere.DatastoreInfo
+	for _, nodeVm := range nodeVMs {
+		glog.V(5).Infof("Getting accessible datastores for node %s", nodeVm.VirtualMachine.InventoryPath)
+		accessibleDatastores, err := nodeVm.GetAllAccessibleDatastores(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(sharedDatastores) == 0 {
+			sharedDatastores = accessibleDatastores
+		} else {
+			var sharedAccessibleDatastores []*cspvsphere.DatastoreInfo
+			for _, sharedDs := range sharedDatastores {
+				// Check if sharedDatastores is found in accessibleDatastores
+				for _, accessibleDs := range accessibleDatastores {
+					// Intersection is performed based on the datastoreUrl as this uniquely identifies the datastore.
+					if sharedDs.Info.Url == accessibleDs.Info.Url {
+						sharedAccessibleDatastores = append(sharedAccessibleDatastores, sharedDs)
+						break
+					}
+				}
+			}
+			sharedDatastores = sharedAccessibleDatastores
+		}
+		if len(sharedDatastores) == 0 {
+			return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster for nodeVm: %+v", nodeVm)
+		}
+	}
+	glog.V(5).Infof("sharedDatastores : %+v", sharedDatastores)
+	for _, sharedDs := range sharedDatastores {
+		datastoreURLs = append(datastoreURLs, sharedDs.Info.Url)
+	}
+	return datastoreURLs, nil
 }

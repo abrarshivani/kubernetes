@@ -35,6 +35,16 @@ type Datastore struct {
 	Datacenter *Datacenter
 }
 
+// DatastoreInfo is a structure to store the Datastore and it's Info.
+type DatastoreInfo struct {
+	*Datastore
+	Info *types.DatastoreInfo
+}
+
+func (di DatastoreInfo) String() string {
+	return fmt.Sprintf("Datastore: %+v, datastore URL: %s", di.Datastore, di.Info.Url)
+}
+
 // stripDatastorePrefix strips the Datastore prefix from the given disk path.
 func (ds *Datastore) stripDatastorePrefix(diskPath string) string {
 	return strings.Replace(diskPath, fmt.Sprintf("[%s] ", ds.Name()), "", -1)

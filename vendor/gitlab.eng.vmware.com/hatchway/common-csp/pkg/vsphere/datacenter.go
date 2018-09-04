@@ -161,3 +161,37 @@ func (dc *Datacenter) GetVMMoList(ctx context.Context, vmObjList []*VirtualMachi
 	}
 	return vmMoList, nil
 }
+
+// GetAllDatastores gets the datastore URL to DatastoreInfo map for all the datastores in
+// the datacenter.
+func (dc *Datacenter) GetAllDatastores(ctx context.Context) (map[string]*DatastoreInfo, error) {
+	finder := find.NewFinder(dc.Client(), false)
+	finder.SetDatacenter(dc.Datacenter)
+	datastores, err := finder.DatastoreList(ctx, "*")
+	if err != nil {
+		log.WithFields(log.Fields{"Datacenter": dc.Datacenter.String(), "err": err}).Error("Failed to get all the datastores")
+		return nil, err
+	}
+	var dsList []types.ManagedObjectReference
+	for _, ds := range datastores {
+		dsList = append(dsList, ds.Reference())
+	}
+
+	var dsMoList []mo.Datastore
+	pc := property.DefaultCollector(dc.Client())
+	properties := []string{"info"}
+	err = pc.Retrieve(ctx, dsList, properties, &dsMoList)
+	if err != nil {
+		log.WithFields(log.Fields{"dsList": dsList, "properties": properties, "err": err}).Error("Failed to get Datastore managed objects from datastore objects")
+		return nil, err
+	}
+
+	dsURLInfoMap := make(map[string]*DatastoreInfo)
+	for _, dsMo := range dsMoList {
+		dsURLInfoMap[dsMo.Info.GetDatastoreInfo().Url] = &DatastoreInfo{
+			&Datastore{object.NewDatastore(dc.Client(), dsMo.Reference()),
+				dc},
+			dsMo.Info.GetDatastoreInfo()}
+	}
+	return dsURLInfoMap, nil
+}
