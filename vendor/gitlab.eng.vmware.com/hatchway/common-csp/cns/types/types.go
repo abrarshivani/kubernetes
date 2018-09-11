@@ -309,7 +309,7 @@ type CnsQueryFilter struct {
 	ContainerClusterIds []string                     `xml:"containerClusterIds,omitempty"`
 	VSphereUsers        []string                     `xml:"vSphereUsers,omitempty"`
 	StoragePolicyId     string                       `xml:"storagePolicyId,omitempty"`
-	Datastore           types.ManagedObjectReference `xml:"datastore,omitempty"`
+	Datastore           []types.ManagedObjectReference `xml:"datastore,omitempty"`
 	Labels              []types.KeyValue             `xml:"labels,omitempty"`
 	Cursor              CnsCursor                    `xml:"cursor,omitempty"`
 }

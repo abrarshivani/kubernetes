@@ -24,11 +24,13 @@ import (
 	"strings"
 	"time"
 
+	. "github.com/onsi/gomega"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
+	cnstypes "gitlab.eng.vmware.com/hatchway/common-csp/cns/types"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -42,8 +44,9 @@ const (
 
 // Represents a vSphere instance where one or more kubernetes nodes are running.
 type VSphere struct {
-	Config *Config
-	Client *govmomi.Client
+	Config    *Config
+	Client    *govmomi.Client
+	CnsClient *CNSClient
 }
 
 // VolumeOptions specifies various options for a volume.
@@ -216,6 +219,41 @@ func (vs *VSphere) IsVMPresent(vmName string, dataCenterRef types.ManagedObjectR
 		}
 	}
 	return
+}
+
+// QueryCNSVolume Call QueryVolume for CSP and verify volume id and datastore url matches
+func (vs *VSphere) QueryCNSVolume(fcdID string, datastoreURL string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Connect to VC
+	Connect(ctx, vs)
+	var volumeIds []cnstypes.CnsVolumeId
+	volumeIds = append(volumeIds, cnstypes.CnsVolumeId{
+		Id:           fcdID,
+		DatastoreUrl: datastoreURL,
+	})
+	queryFilter := cnstypes.CnsQueryFilter{
+		VolumeIds: volumeIds,
+		Cursor: cnstypes.CnsCursor{
+			Offset: 0,
+			Limit:  100,
+		},
+	}
+	// Connect to CNS to query volume
+	res, err := QueryVolume(ctx, vs, queryFilter)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(res.Volumes[0].VolumeId.Id).NotTo(BeEmpty(), "VolumeId is empty in "+
+		"Query Volume result : %s", res)
+	Expect(res.Volumes[0].VolumeId.DatastoreUrl).NotTo(BeEmpty(), "DatastoreUrl is empty in "+
+		"Query Volume result : %s", res)
+	// Verify VolumeId matched
+	Expect(fcdID == res.Volumes[0].VolumeId.Id).To(BeTrue(), fmt.Sprintf("Query result volume"+
+		"id %v is not same as expected FCD id %v", res.Volumes[0].VolumeId.Id, fcdID))
+	// Verify DatastoreUrl matched
+	Expect(datastoreURL == res.Volumes[0].VolumeId.DatastoreUrl).To(BeTrue(), fmt.Sprintf("Query result DatastoreUrl id %v"+
+		"is not same as expected DatastoreUrl %v", res.Volumes[0].VolumeId.DatastoreUrl, datastoreURL))
+
+	return nil
 }
 
 // initVolumeOptions function sets default values for volumeOptions parameters if not set
