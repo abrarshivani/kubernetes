@@ -30,6 +30,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
+	"strings"
 )
 
 type vsphereVMDKAttacher struct {
@@ -99,7 +100,10 @@ func (attacher *vsphereVMDKAttacher) Attach(spec *volume.Spec, nodeName types.No
 		return "", err
 	}
 
-	return path.Join(diskByIDPath, diskSCSIPrefix+diskUUID), nil
+	diskUUID = strings.ToLower(strings.Replace(diskUUID, "-", "", -1))
+	devicePath := path.Join(diskByIDPath, diskSCSIPrefix + diskUUID)
+	glog.V(5).Infof("vSphere: Attach disk returning device path %s", devicePath)
+	return devicePath, nil
 }
 
 func (attacher *vsphereVMDKAttacher) VolumesAreAttached(specs []*volume.Spec, nodeName types.NodeName) (map[*volume.Spec]bool, error) {
@@ -202,7 +206,13 @@ func (attacher *vsphereVMDKAttacher) GetDeviceMountPath(spec *volume.Spec) (stri
 		return "", err
 	}
 
-	return makeGlobalPDPath(attacher.host, volumeSource.VolumePath), nil
+	var devPath string
+	if volumeSource.VolumeID == "" {
+		devPath = volumeSource.VolumePath
+	} else {
+		devPath = volumeSource.VolumeID
+	}
+	return makeGlobalPDPath(attacher.host, devPath), nil
 }
 
 // GetMountDeviceRefs finds all other references to the device referenced

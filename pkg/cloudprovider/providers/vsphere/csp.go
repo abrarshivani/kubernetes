@@ -479,7 +479,7 @@ func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (diskUUID string, er
 	if v1helper.GetPersistentVolumeClass(spec.PV) == "" {
 		glog.V(4).Infof("Volume %v is provisioned statically", volID)
 		createSpec := &cspvolumestypes.CreateSpec{
-			Name: volID.ID,
+			Name: spec.PV.Name,
 			ContainerCluster: cspvolumestypes.ContainerCluster{
 				ClusterID:   csp.cfg.Global.ClusterID,
 				ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
