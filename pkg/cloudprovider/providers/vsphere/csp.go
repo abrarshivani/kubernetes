@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/glog"
 	nodemanager "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
 	cspvolumes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
@@ -187,6 +188,9 @@ func (csp *CSP) PVCDeleted(obj interface{}) {
 		return
 	}
 	if pv.Spec.PersistentVolumeSource.VsphereVolume == nil {
+		return
+	}
+	if pv.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimDelete {
 		return
 	}
 	// If the PV is retain we need to delete PVC labels
@@ -449,7 +453,7 @@ func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 		},
 		Labels: AddPrefixToLabels(PrefixPVCLabel, spec.PVC.Labels),
 	}
-	glog.V(5).Infof("vSphere Cloud Provider creating volume %s with create spec %+v", spec.Name, createSpec)
+	glog.V(5).Infof("vSphere Cloud Provider creating volume %s with create spec %+v", spec.Name, spew.Sdump(createSpec))
 	volumeID, err := cspvolumes.GetManager(vc).CreateVolume(createSpec)
 	if err != nil {
 		glog.Errorf("Failed to create disk %s with error %+v", spec.Name, err)
@@ -496,7 +500,7 @@ func (csp *CSP) AttachVSphereVolume(spec *AttachVolumeSpec) (diskUUID string, er
 		},
 		VirtualMachine: node,
 	}
-	glog.V(5).Infof("vSphere Cloud Provider attaching volume %s with attach spec %+v", volID.ID, attachSpec)
+	glog.V(5).Infof("vSphere Cloud Provider attaching volume %s with attach spec %+v", volID.ID, spew.Sdump(attachSpec))
 	diskUUID, err = cspvolumes.GetManager(vc).AttachVolume(attachSpec)
 	if err != nil {
 		glog.Errorf("Failed to attach disk %+v with err %+v", volID, err)
@@ -530,7 +534,7 @@ func (csp *CSP) DetachVSphereVolume(spec *DetachVolumeSpec) error {
 		},
 		VirtualMachine: node,
 	}
-	glog.V(5).Infof("vSphere Cloud Provider detaching volume %s with detach spec %+v", spec.VolID.ID, detachSpec)
+	glog.V(5).Infof("vSphere Cloud Provider detaching volume %s with detach spec %+v", spec.VolID.ID, spew.Sdump(detachSpec))
 	err = cspvolumes.GetManager(vc).DetachVolume(detachSpec)
 	if err != nil {
 		glog.Errorf("Failed to detach disk %s with err %+v", spec.VolID.ID, err)
@@ -541,7 +545,6 @@ func (csp *CSP) DetachVSphereVolume(spec *DetachVolumeSpec) error {
 
 // DeleteVolume deletes a volume given its spec.
 func (csp *CSP) DeleteVSphereVolume(spec *DeleteVolumeSpec) error {
-	// TODO: Modify vmdiskPath to all input options in the log next line.
 	glog.V(3).Infof("vSphere Cloud Provider deleting volume %+v", spec.VolID.ID)
 	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
 	if err != nil {
@@ -549,7 +552,6 @@ func (csp *CSP) DeleteVSphereVolume(spec *DeleteVolumeSpec) error {
 			csp.cfg.Workspace.VCenterIP, spec.VolID, err)
 		return err
 	}
-	// TODO: Replace vmdiskPath to VolumeID in this function wherever required.
 	deleteSpec := &cspvolumestypes.DeleteSpec{
 		VolumeID: &cspvolumestypes.VolumeID{
 			ID:           spec.VolID.ID,
@@ -557,7 +559,7 @@ func (csp *CSP) DeleteVSphereVolume(spec *DeleteVolumeSpec) error {
 		},
 	}
 
-	glog.V(5).Infof("vSphere Cloud Provider deleting volume %s with delete spec %+v", spec.VolID.ID, deleteSpec)
+	glog.V(5).Infof("vSphere Cloud Provider deleting volume %s with delete spec %s", spec.VolID.ID, spew.Sdump(deleteSpec))
 	err = cspvolumes.GetManager(vc).DeleteVolume(deleteSpec)
 	if err != nil {
 		glog.Errorf("Failed to delete disk %s with error %+v", spec.VolID.ID, err)
@@ -574,20 +576,29 @@ func (csp *CSP) VolumesIsAttached(volumeID VolumeID, nodeName k8stypes.NodeName)
 	nodeVolumes[nodeName] = append(nodeVolumes[nodeName], &volumeID)
 	volumesAttached, err := csp.VolumesAreAttached(nodeVolumes)
 	if err != nil {
-		glog.Errorf("Failed to check disk is attached %s to node %s with error %+v", volumeID.ID, nodeName, err)
+		glog.Errorf("Failed to check disk: %s is attached to node %s. Error %+v", volumeID.ID, nodeName, err)
 		return false, err
 	}
-	return volumesAttached[nodeName][&volumeID], nil
+	volumes := volumesAttached[nodeName]
+	for volumeID, isAttached := range volumes {
+		if volumeID.ID == volumeID.ID && volumeID.DatastoreURL == volumeID.DatastoreURL {
+			if isAttached {
+				glog.V(5).Infof("volume %s is attached to the node %s", volumeID.ID, nodeName)
+			}
+			return isAttached, nil
+		}
+	}
+	return false, fmt.Errorf("failed to get volume attachment result for volume: %s and node: %s", volumeID.ID, nodeName)
 }
 
 // VolumesAreAttached checks if a list disks are attached to the given node.
 // Assumption: If node doesn't exist, disks are not attached to the node.
 func (csp *CSP) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID) (map[k8stypes.NodeName]map[*VolumeID]bool, error) {
-	glog.V(3).Infof("vSphere Cloud Provider checking disks are attached %+v", nodeVolumes)
+	glog.V(3).Infof("vSphere Cloud Provider checking disks are attached %s", spew.Sdump(nodeVolumes))
 	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
 	if err != nil {
 		glog.Errorf("Cannot get virtual center %s from vitualcentermanager for checking disk are attach %+v with error %+v",
-			csp.cfg.Workspace.VCenterIP, nodeVolumes, err)
+			csp.cfg.Workspace.VCenterIP, spew.Sdump(nodeVolumes), err)
 		return nil, err
 	}
 	cspNodeVolumes := make(map[string][]*cspvolumestypes.VolumeID)
@@ -603,7 +614,7 @@ func (csp *CSP) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID
 	}
 	volumesAreAttached, err := cspvolumes.GetManager(vc).VolumesAreAttached(csp.nodeManager, cspNodeVolumes)
 	if err != nil {
-		glog.Errorf("Failed to check disk are attach %s with error %+v", volumesAreAttached, err)
+		glog.Errorf("Failed to check volume attachment with Nodes. NodeVolumeMap: %+v, Error %+v", spew.Sdump(cspNodeVolumes), err)
 		return nil, err
 	}
 	attachedVolumes := make(map[k8stypes.NodeName]map[*VolumeID]bool)
@@ -613,14 +624,11 @@ func (csp *CSP) VolumesAreAttached(nodeVolumes map[k8stypes.NodeName][]*VolumeID
 			attachedVolumes[k8snode] = make(map[*VolumeID]bool)
 		}
 		for volumeID, attached := range volumes {
-			attachedVolumes[k8snode][&VolumeID{ID: GetVolPathFromVolumeID(volumeID)}] = attached
+			attachedVolumes[k8snode][&VolumeID{ID: volumeID.ID, DatastoreURL: volumeID.DatastoreURL}] = attached
 		}
 	}
+	glog.V(5).Infof("nodes and volumes attachment map: %s", spew.Sdump(attachedVolumes))
 	return attachedVolumes, nil
-}
-
-func GetVolPathFromVolumeID(volumeID *cspvolumestypes.VolumeID) string {
-	return fmt.Sprintf("[%s] %s", volumeID.DatastoreURL, volumeID.ID)
 }
 
 func getPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.PersistentVolumeLister) (*v1.PersistentVolume, error) {

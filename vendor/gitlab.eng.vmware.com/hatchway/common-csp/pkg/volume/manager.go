@@ -418,6 +418,7 @@ func (m *defaultManager) VolumesAreAttached(nodeMgr node.Manager, nodeVolumes ma
 	}
 	nodesToRetry, err := volumesAreAttached(ctx, nodeMgr, nodeVolumes, disksAttached, false)
 	if err != nil {
+		log.WithFields(log.Fields{"node-volumes map": nodeVolumes, "err": err}).Error("failed to checks list of disks attached to the given node")
 		return nil, err
 	}
 	if len(nodesToRetry) != 0 {

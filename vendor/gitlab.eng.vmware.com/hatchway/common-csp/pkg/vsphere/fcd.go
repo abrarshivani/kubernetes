@@ -17,6 +17,7 @@ package vsphere
 import (
 	"context"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/types"
 )
@@ -49,13 +50,22 @@ func (vc *VirtualCenter) RetrieveFCDAssociations(ctx context.Context, volSpecLis
 		}
 		vStorageObjectSpecList = append(vStorageObjectSpecList, vStorageObjectSpec)
 	}
-
+	err := vc.Connect(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err, "vcenter": vc.Config.Host,
+		}).Error("Failed to connect to Virtual Center")
+		return nil, err
+	}
 	req := types.RetrieveVStorageObjectAssociations{
 		This: *vc.Client.Client.ServiceContent.VStorageObjectManager,
 		Ids:  vStorageObjectSpecList,
 	}
 	res, err := methods.RetrieveVStorageObjectAssociations(ctx, vc.Client.Client, &req)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err, "vcenter": vc.Config.Host,
+		}).Error("RetrieveVStorageObjectAssociations call failed")
 		return nil, err
 	}
 	var vmVolumeAssociations []*VMVolumeAssociation

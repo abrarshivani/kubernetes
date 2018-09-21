@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/davecgh/go-spew/spew"
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware/govmomi/object"
 	vimtypes "github.com/vmware/govmomi/vim25/types"
@@ -106,8 +107,8 @@ func constructCnsCreateSpecList(spec *types.CreateSpec) cnstypes.CnsVolumeCreate
 	cnsCreateSpec := cnstypes.CnsVolumeCreateSpec{
 		Name: spec.Name,
 		ContainerCluster: cnstypes.CnsContainerCluster{
-			ClusterType: spec.ContainerCluster.ClusterID,
-			ClusterId:   string(spec.ContainerCluster.ClusterType),
+			ClusterType: string(spec.ContainerCluster.ClusterType),
+			ClusterId:   spec.ContainerCluster.ClusterID,
 		},
 		DatastoreUrls:     spec.DatastoreURLs,
 		CnsVolumeBaseSpec: cnsVolumeBaseSpec,
@@ -130,7 +131,7 @@ func volumesAreAttached(ctx context.Context, nodeMgr node.Manager, nodeVolumes m
 	vcNodes := make(map[string]map[string][]*types.VolumeID)
 	for node, volumeList := range nodeVolumes {
 		// Get VM instance from node name
-		vm, err := nodeMgr.GetNode(node)
+		vm, err := nodeMgr.GetNodeByName(node)
 		if err != nil {
 			log.WithField("err", err).Info("Failed to get node information")
 			return nil, err
@@ -255,7 +256,11 @@ func checkVolumesAttached(ctx context.Context, vc *vsphere.VirtualCenter, vmVolu
 			volSpecList = append(volSpecList, volSpec)
 		}
 	}
+	log.WithFields(log.Fields{"volSpecList": spew.Sdump(volSpecList)}).
+		Info("Calling RetrieveFCDAssociations.")
 	vmVolumeAssociations, err := vc.RetrieveFCDAssociations(ctx, volSpecList)
+	log.WithFields(log.Fields{"vmVolumeAssociations": spew.Sdump(vmVolumeAssociations)}).
+		Info("RetrieveFCDAssociations Result")
 	if err != nil {
 		log.WithFields(log.Fields{"volSpecList": volSpecList, "err": err}).
 			Error("Failed to retrieve FCD associations")
@@ -264,12 +269,14 @@ func checkVolumesAttached(ctx context.Context, vc *vsphere.VirtualCenter, vmVolu
 	for _, vmVolumeAssociation := range vmVolumeAssociations {
 		for _, vmID := range vmVolumeAssociation.VMIdList {
 			if _, ok1 := vmVolumesMap[vmID]; ok1 {
-				if volumeID, ok2 := volumeIDMap[vmID]; ok2 {
-					setNodeVolumeMap(attached, volumeID, vmVolumeAssociation.ID, true)
+				if volumeID, ok2 := volumeIDMap[vmVolumeAssociation.ID]; ok2 {
+					setNodeVolumeMap(attached, volumeID, vmID, true)
 				}
 			}
 		}
 	}
+	log.WithFields(log.Fields{"vm-volumes attachment map": spew.Sdump(attached)}).
+		Info("checkVolumesAttached end")
 	return nil
 }
 

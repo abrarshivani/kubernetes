@@ -72,7 +72,7 @@ func (plugin *vsphereVolumePlugin) GetVolumeName(spec *volume.Spec) (string, err
 	}
 
 	if volumeSource.VolumePath == "" {
-		return volumeSource.VolumeID, nil
+		return getVolumeIdentifier(volumeSource.DatastoreURL, volumeSource.VolumeID), nil
 	}
 	return volumeSource.VolumePath, nil
 }
@@ -107,8 +107,12 @@ func (plugin *vsphereVolumePlugin) newMounterInternal(spec *volume.Spec, podUID 
 	if err != nil {
 		return nil, err
 	}
-
-	volPath := vvol.VolumePath
+	var volPath string
+	if vvol.VolumeID != "" {
+		volPath = getVolumeIdentifier(vvol.DatastoreURL, vvol.VolumeID)
+	} else {
+		volPath = vvol.VolumePath
+	}
 	fsType := vvol.FSType
 
 	return &vsphereVolumeMounter{
@@ -145,12 +149,15 @@ func (plugin *vsphereVolumePlugin) ConstructVolumeSpec(volumeName, mountPath str
 		return nil, err
 	}
 	volumePath = strings.Replace(volumePath, "\\040", " ", -1)
-	glog.V(5).Infof("vSphere volume path is %q", volumePath)
+	glog.V(5).Infof("constructing VolumeSpec from volume path: %s", volumePath)
+	volumeId := getVolumeID(volumePath)
 	vsphereVolume := &v1.Volume{
 		Name: volumeName,
 		VolumeSource: v1.VolumeSource{
 			VsphereVolume: &v1.VsphereVirtualDiskVolumeSource{
-				VolumePath: volumePath,
+				VolumeID:     volumeId.ID,
+				DatastoreURL: volumeId.DatastoreURL,
+				VolumePath:   volumeId.VolumePath,
 			},
 		},
 	}
@@ -316,10 +323,17 @@ func (plugin *vsphereVolumePlugin) newDeleterInternal(spec *volume.Spec, manager
 	if spec.PersistentVolume != nil && spec.PersistentVolume.Spec.VsphereVolume == nil {
 		return nil, fmt.Errorf("spec.PersistentVolumeSource.VsphereVolume is nil")
 	}
+	var volPath string
+	if spec.PersistentVolume.Spec.VsphereVolume.VolumeID != "" {
+		volPath = getVolumeIdentifier(spec.PersistentVolume.Spec.VsphereVolume.DatastoreURL, spec.PersistentVolume.Spec.VsphereVolume.VolumeID)
+	} else {
+		volPath = spec.Volume.VsphereVolume.VolumePath
+	}
+	glog.V(5).Infof("creating vsphereVolumeDeleter for volume path: %s", volPath)
 	return &vsphereVolumeDeleter{
 		&vsphereVolume{
 			volName: spec.Name(),
-			volPath: spec.PersistentVolume.Spec.VsphereVolume.VolumePath,
+			volPath: volPath,
 			manager: manager,
 			plugin:  plugin,
 		}}, nil

@@ -54,11 +54,15 @@ func (cr *ComplianceResult) String() string {
 
 // ConnectPbm creates a PBM client for the virtual center.
 func (vc *VirtualCenter) ConnectPbm(ctx context.Context) error {
-	clientMutex.Lock()
-	defer clientMutex.Unlock()
-
+	var err error
+	err = vc.Connect(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"host": vc.Config.Host, "err": err,
+		}).Error("Failed to connect to Virtual Center")
+		return err
+	}
 	if vc.PbmClient == nil {
-		var err error
 		if vc.PbmClient, err = pbm.NewClient(ctx, vc.Client.Client); err != nil {
 			log.WithField("err", err).Error("Failed to create pbm client")
 			return err

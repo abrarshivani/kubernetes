@@ -159,22 +159,35 @@ func (vc *VirtualCenter) connect(ctx context.Context) error {
 
 	// If session hasn't expired, nothing to do.
 	sessionMgr := session.NewManager(vc.Client.Client)
+	// SessionMgr.UserSession(ctx) retrieves and returns the SessionManager's CurrentSession field
+	// Nil is returned if the session is not authenticated or timed out.
 	if userSession, err := sessionMgr.UserSession(ctx); err != nil {
 		log.WithField("err", err).Error("Failed to obtain user session")
 		return err
 	} else if userSession != nil {
 		return nil
 	}
-
 	// If session has expired, create a new instance.
 	log.Warn("Creating a new client session as the existing session isn't valid or not authenticated")
-	if err = vc.Disconnect(ctx); err != nil {
-		log.WithField("err", err).Error("Failed to disconnect")
-		return err
-	}
 	if vc.Client, err = vc.newClient(ctx); err != nil {
 		log.WithField("err", err).Error("Failed to create govmomi client")
 		return err
+	}
+	// Recreate PbmClient If created using timed out VC Client
+	if vc.PbmClient != nil {
+		if vc.PbmClient, err = pbm.NewClient(ctx, vc.Client.Client); err != nil {
+			log.WithField("err", err).Error("Failed to create pbm client")
+			return err
+		}
+	}
+	// Recreate CNSClient If created using timed out VC Client
+	if vc.CnsClient != nil {
+		if vc.CnsClient, err = NewCnsClient(ctx, vc.Client.Client); err != nil {
+			log.WithFields(log.Fields{
+				"host": vc.Config.Host, "err": err,
+			}).Error("Failed to create CNS client on vCenter host")
+			return err
+		}
 	}
 	return nil
 }

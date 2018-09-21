@@ -30,6 +30,8 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
+	"path/filepath"
+	"regexp"
 )
 
 const (
@@ -40,6 +42,7 @@ const (
 	diskformat         = "diskformat"
 	datastore          = "datastore"
 	StoragePolicyName  = "storagepolicyname"
+	datastoreURLPrefix = "ds:///vmfs/volumes/"
 
 	HostFailuresToTolerateCapability    = "hostfailurestotolerate"
 	ForceProvisioningCapability         = "forceprovisioning"
@@ -172,11 +175,8 @@ func (util *VsphereDiskUtil) DeleteVolume(vd *vsphereVolumeDeleter) error {
 	if err != nil {
 		return err
 	}
-
 	if err = cloud.DeleteVSphereVolume(&vsphere.DeleteVolumeSpec{
-		VolID: vsphere.VolumeID{
-			ID: vd.volPath,
-		},
+		VolID: getVolumeID(vd.volPath),
 	}); err != nil {
 		glog.V(2).Infof("Error deleting vsphere volume %s: %v", vd.volPath, err)
 		return err
@@ -185,13 +185,48 @@ func (util *VsphereDiskUtil) DeleteVolume(vd *vsphereVolumeDeleter) error {
 	return nil
 }
 
-func getVolPathfromVolumeName(deviceMountPath string) string {
+func getVolIdOrPathfromMountPath(deviceMountPath string) string {
+	glog.V(4).Infof("deviceMountPath %s", deviceMountPath)
+	var volIdOrPath string
 	// Assumption: No file or folder is named starting with '[' in datastore
-	volPath := deviceMountPath[strings.LastIndex(deviceMountPath, "["):]
+	volIdOrPath = deviceMountPath[strings.LastIndex(deviceMountPath, "["):]
 	// space between datastore and vmdk name in volumePath is encoded as '\040' when returned by GetMountRefs().
 	// volumePath eg: "[local] xxx.vmdk" provided to attach/mount
 	// replacing \040 with space to match the actual volumePath
-	return strings.Replace(volPath, "\\040", " ", -1)
+	// For FCD Disk, deviceMountPath should be [vsan:521e25017e65e851-86a98d3db574e91f] 6000C297-3abe-26e1-fd64-b83740b45814
+	volIdOrPath = strings.Replace(volIdOrPath, "\\040", " ", -1)
+	return volIdOrPath
+}
+
+// Returns CSP Volume Identifier which is used to find the disk resource in the provider
+// This is set in the vsphereVolume->volPath
+func getVolumeIdentifier(datastoreURL string, fcdId string) string {
+	return "[" + filepath.Base(datastoreURL) + "] " + fcdId
+
+}
+
+// Construct and returns vsphere.VolumeID from given volumePath
+func getVolumeID(volumePath string) vsphere.VolumeID {
+	var volPath, fcdId, dsURL string
+	// Here volumePath could be either
+	// [vsan:5297ff7a8bd7f817-47d91c95e6c1a77a] a011f917-0f68-4ac1-a338-9c573bfd7dd5 or
+	// [VSANDatastore] kubevols/kubernetes-dynamic-pvc-83295256-f8e0-11e6-8263-005056b2349c.vmdk
+	// if volumePath ends with vmdk, volume is assumed provisioned using vSphere Cloud Provider
+	// else volume is assumed provisioned using CSP.
+	if !strings.HasSuffix(volumePath, "vmdk") {
+		fcdId = strings.TrimSpace(volumePath[strings.LastIndex(volumePath, " "):])
+		rgx := regexp.MustCompile(`\[(.*?)\]`)
+		// datastoreURLPrefix is ds:///vmfs/volumes/
+		dsURL = datastoreURLPrefix + rgx.FindStringSubmatch(volumePath)[1] + "/"
+	} else {
+		volPath = volumePath
+	}
+	volumeID := vsphere.VolumeID{
+		ID:           fcdId,
+		DatastoreURL: dsURL,
+		VolumePath:   volPath,
+	}
+	return volumeID
 }
 
 func getCloudProvider(cloud cloudprovider.Interface) (vsphere.CommonVolumes, error) {

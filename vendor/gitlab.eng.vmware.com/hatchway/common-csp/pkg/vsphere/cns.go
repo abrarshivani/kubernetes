@@ -55,11 +55,15 @@ func NewCnsClient(ctx context.Context, c *vim25.Client) (*CNSClient, error) {
 
 // ConnectCns creates a CNS client for the virtual center.
 func (vc *VirtualCenter) ConnectCns(ctx context.Context) error {
-	clientMutex.Lock()
-	defer clientMutex.Unlock()
-
+	var err error
+	err = vc.Connect(ctx)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"host": vc.Config.Host, "err": err,
+		}).Error("Failed to connect to Virtual Center")
+		return err
+	}
 	if vc.CnsClient == nil {
-		var err error
 		if vc.CnsClient, err = NewCnsClient(ctx, vc.Client.Client); err != nil {
 			log.WithFields(log.Fields{
 				"host": vc.Config.Host, "err": err,
@@ -72,8 +76,6 @@ func (vc *VirtualCenter) ConnectCns(ctx context.Context) error {
 
 // DisconnectCns destroys the CNS client for the virtual center.
 func (vc *VirtualCenter) DisconnectCns(ctx context.Context) {
-	clientMutex.Lock()
-	defer clientMutex.Unlock()
 	if vc.CnsClient == nil {
 		log.Info("CnsClient wasn't connected, ignoring")
 	} else {
