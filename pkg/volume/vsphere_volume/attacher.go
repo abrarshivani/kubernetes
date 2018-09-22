@@ -313,7 +313,6 @@ func (detacher *vsphereVMDKDetacher) Detach(volumeName string, nodeName types.No
 	glog.V(4).Infof("vSphere: Detaching volume: %s from node %s", volumeName, nodeName)
 	volIdOrPath := getVolIdOrPathfromMountPath(volumeName)
 	glog.V(5).Infof("Volume Id or Path from volumeName %s", volIdOrPath)
-	var volumeID vsphere.VolumeID
 	volumeId := getVolumeID(volIdOrPath)
 	attached, err := detacher.vsphereVolumes.VolumesIsAttached(volumeId, nodeName)
 	if err != nil {
@@ -331,7 +330,7 @@ func (detacher *vsphereVMDKDetacher) Detach(volumeName string, nodeName types.No
 	attachdetachMutex.LockKey(string(nodeName))
 	defer attachdetachMutex.UnlockKey(string(nodeName))
 	if err := detacher.vsphereVolumes.DetachVSphereVolume(&vsphere.DetachVolumeSpec{
-		VolID:    volumeID,
+		VolID:    volumeId,
 		NodeName: nodeName,
 	}); err != nil {
 		glog.Errorf("Error detaching volume %q from node %q: %v", volIdOrPath, nodeName, err)
