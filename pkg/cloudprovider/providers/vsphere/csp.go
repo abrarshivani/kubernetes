@@ -262,7 +262,7 @@ func (csp *CSP) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (str
 
 func (csp *CSP) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName) ([]v1.NodeAddress, error) {
 	// Get local IP addresses if node is local node
-	if csp.vmUUID == convertToString(nodeName) {
+	if csp.hostName == convertToString(nodeName) {
 		return getLocalIP()
 	}
 
