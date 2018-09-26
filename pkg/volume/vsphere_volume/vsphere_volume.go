@@ -327,7 +327,7 @@ func (plugin *vsphereVolumePlugin) newDeleterInternal(spec *volume.Spec, manager
 	if spec.PersistentVolume.Spec.VsphereVolume.VolumeID != "" {
 		volPath = getVolumeIdentifier(spec.PersistentVolume.Spec.VsphereVolume.DatastoreURL, spec.PersistentVolume.Spec.VsphereVolume.VolumeID)
 	} else {
-		volPath = spec.Volume.VsphereVolume.VolumePath
+		volPath = spec.PersistentVolume.Spec.VsphereVolume.VolumePath
 	}
 	glog.V(5).Infof("creating vsphereVolumeDeleter for volume path: %s", volPath)
 	return &vsphereVolumeDeleter{
