@@ -10,6 +10,7 @@ go_library(
     importpath = "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume",
     visibility = ["//visibility:public"],
     deps = [
+        "//vendor/github.com/davecgh/go-spew/spew:go_default_library",
         "//vendor/github.com/sirupsen/logrus:go_default_library",
         "//vendor/github.com/vmware/govmomi/object:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25/types:go_default_library",

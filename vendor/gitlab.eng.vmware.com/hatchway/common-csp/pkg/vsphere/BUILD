@@ -5,7 +5,6 @@ go_library(
     srcs = [
         "cns.go",
         "credentialmanager.go",
-        "custom_errors.go",
         "datacenter.go",
         "datastore.go",
         "fcd.go",

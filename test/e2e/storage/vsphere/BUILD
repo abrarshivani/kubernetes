@@ -9,6 +9,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "bootstrap.go",
+        "cns.go",
         "config.go",
         "connection.go",
         "context.go",
@@ -33,7 +34,7 @@ go_library(
         "vsphere_volume_ops_storm.go",
         "vsphere_volume_perf.go",
         "vsphere_volume_placement.go",
-        "vsphere_volume_verifycreate_csp",
+        "vsphere_volume_verifycreate_csp.go",
         "vsphere_volume_vpxd_restart.go",
         "vsphere_volume_vsan_policy.go",
     ],
@@ -64,6 +65,8 @@ go_library(
         "//vendor/github.com/vmware/govmomi/vim25/mo:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25/soap:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25/types:go_default_library",
+        "//vendor/gitlab.eng.vmware.com/hatchway/common-csp/cns/methods:go_default_library",
+        "//vendor/gitlab.eng.vmware.com/hatchway/common-csp/cns/types:go_default_library",
         "//vendor/gopkg.in/gcfg.v1:go_default_library",
     ],
 )

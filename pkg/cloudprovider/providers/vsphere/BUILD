@@ -32,6 +32,7 @@ go_library(
         "//staging/src/k8s.io/client-go/informers:go_default_library",
         "//staging/src/k8s.io/client-go/listers/core/v1:go_default_library",
         "//staging/src/k8s.io/client-go/tools/cache:go_default_library",
+        "//vendor/github.com/davecgh/go-spew/spew:go_default_library",
         "//vendor/github.com/golang/glog:go_default_library",
         "//vendor/github.com/vmware/govmomi/vapi/rest:go_default_library",
         "//vendor/github.com/vmware/govmomi/vapi/tags:go_default_library",
