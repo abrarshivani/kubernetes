@@ -41,7 +41,7 @@ http_archive(
 
 load("@io_kubernetes_build//defs:bazel_version.bzl", "check_version")
 
-check_version("0.6.0")
+check_version("0.17.0")
 
 load("@io_bazel_rules_go//go:def.bzl", "go_rules_dependencies", "go_register_toolchains", "go_download_sdk")
 load("@io_bazel_rules_docker//docker:docker.bzl", "docker_repositories", "docker_pull")
