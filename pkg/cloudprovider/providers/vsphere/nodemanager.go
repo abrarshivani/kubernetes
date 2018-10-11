@@ -77,7 +77,7 @@ const (
 	QUEUE_SIZE = POOL_SIZE * 10
 )
 
-func (nm *NodeManager) DiscoverNode(nodeName string) error {
+func (nm *NodeManager) DiscoverNode(nodeName string, node *v1.Node) error {
 	type VmSearch struct {
 		vc         string
 		datacenter *vclib.Datacenter
@@ -88,12 +88,20 @@ func (nm *NodeManager) DiscoverNode(nodeName string) error {
 	var queueChannel chan *VmSearch
 	var wg sync.WaitGroup
 	var globalErr *error
-
+	var nodeUUID string
 	queueChannel = make(chan *VmSearch, QUEUE_SIZE)
 	nodeUUID, err := nm.GetVMUUID(nodeName)
 	if err != nil {
-		glog.Errorf("Node Discovery failed to get node uuid for node %s with error: %v", nodeName, err)
-		return err
+		if node != nil {
+			nodeUUID, err = GetNodeUUID(node)
+			if err != nil {
+				glog.Errorf("Node Discovery failed to get node uuid for node %s with error: %v", node.Name, err)
+				return err
+			}
+		} else {
+			glog.Errorf("Node Discovery failed to get node uuid for node %s with error: %v", nodeName, err)
+			return err
+		}
 	}
 
 	glog.V(4).Infof("Discovering node %s with uuid %s", nodeName, nodeUUID)
@@ -224,6 +232,33 @@ func (nm *NodeManager) DiscoverNode(nodeName string) error {
 	return vclib.ErrNoVMFound
 }
 
+func (nm *NodeManager) RediscoverNode(nodeName k8stypes.NodeName) error {
+	node, err := nm.GetNode(nodeName)
+	if err != nil {
+		return nm.DiscoverNode(convertToString(nodeName), nil)
+	}
+	return nm.DiscoverNode(convertToString(nodeName), &node)
+}
+
+func (nm *NodeManager) GetNode(nodeName k8stypes.NodeName) (v1.Node, error) {
+	nm.registeredNodesLock.RLock()
+	node := nm.registeredNodes[convertToString(nodeName)]
+	nm.registeredNodesLock.RUnlock()
+	if node == nil {
+		return v1.Node{}, vclib.ErrNoVMFound
+	}
+	return *node, nil
+}
+
+// GetVMUUIDFromNodeOrConfigMap first gets node's UUID from node otherwise from configmap
+func (nm *NodeManager) GetVMUUIDFromNodeOrConfigMap(nodeName k8stypes.NodeName) (string, error) {
+	node, err := nm.GetNode(nodeName)
+	if err == nil {
+		return GetNodeUUID(&node)
+	}
+	return nm.GetVMUUID(convertToString(nodeName))
+}
+
 func (nm *NodeManager) RegisterNode(node *v1.Node) error {
 	nm.addNode(node)
 	var err error
@@ -236,7 +271,7 @@ func (nm *NodeManager) RegisterNode(node *v1.Node) error {
 	if err != nil {
 		glog.Errorf("error registering node %s with %v", node.Name, err)
 	}
-	err = nm.DiscoverNode(node.Name)
+	err = nm.DiscoverNode(node.Name, node)
 	if err != nil {
 		glog.Errorf("error discovering node %s with %v", node.Name, err)
 	}
@@ -376,7 +411,7 @@ func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error)
 	if nodeInfo == nil {
 		// Rediscover node if no NodeInfo found.
 		glog.V(4).Infof("No VM found for node %q. Initiating rediscovery.", convertToString(nodeName))
-		err = nm.DiscoverNode(convertToString(nodeName))
+		err = nm.RediscoverNode(nodeName)
 		if err != nil {
 			glog.Errorf("Error %q node info for node %q not found", err, convertToString(nodeName))
 			return NodeInfo{}, err
@@ -403,8 +438,8 @@ func (nm *NodeManager) GetNodeDetails() ([]NodeDetails, error) {
 	defer nm.registeredNodesLock.Unlock()
 	var nodeDetails []NodeDetails
 
-	for nodeName := range nm.registeredNodes {
-		nodeInfo, err := nm.GetNodeInfoWithNodeObject(nodeName)
+	for nodeName, nodeObj := range nm.registeredNodes {
+		nodeInfo, err := nm.GetNodeInfoWithNodeObject(nodeName, nodeObj)
 		if err != nil {
 			return nil, err
 		}
@@ -500,7 +535,7 @@ func (nm *NodeManager) vcConnect(ctx context.Context, vsphereInstance *VSphereIn
 // NodeInfo returned may not be updated to reflect current VM location.
 //
 // This method is a getter but it can cause side-effect of updating NodeInfo object.
-func (nm *NodeManager) GetNodeInfoWithNodeObject(nodeName string) (NodeInfo, error) {
+func (nm *NodeManager) GetNodeInfoWithNodeObject(nodeName string, node *v1.Node) (NodeInfo, error) {
 	getNodeInfo := func(nodeName string) *NodeInfo {
 		nm.nodeInfoLock.RLock()
 		nodeInfo := nm.nodeInfoMap[nodeName]
@@ -512,7 +547,7 @@ func (nm *NodeManager) GetNodeInfoWithNodeObject(nodeName string) (NodeInfo, err
 	if nodeInfo == nil {
 		// Rediscover node if no NodeInfo found.
 		glog.V(4).Infof("No VM found for node %q. Initiating rediscovery.", nodeName)
-		err = nm.DiscoverNode(nodeName)
+		err = nm.DiscoverNode(nodeName, node)
 		if err != nil {
 			glog.Errorf("Error %q node info for node %q not found", err, nodeName)
 			return NodeInfo{}, err

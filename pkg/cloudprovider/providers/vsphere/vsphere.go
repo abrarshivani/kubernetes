@@ -857,7 +857,7 @@ func (vs *VSphere) retry(nodeName k8stypes.NodeName, err error) (bool, error) {
 		if vclib.IsManagedObjectNotFoundError(err) {
 			isManagedObjectNotFoundError = true
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
-			err = vs.nodeManager.DiscoverNode(convertToString(nodeName))
+			err = vs.nodeManager.RediscoverNode(nodeName)
 		}
 	}
 	return isManagedObjectNotFoundError, err
@@ -1076,7 +1076,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			// Rediscover nodes which are need to be retried
 			remainingNodesVolumes := make(map[k8stypes.NodeName][]string)
 			for _, nodeName := range nodesToRetry {
-				err = vs.nodeManager.DiscoverNode(convertToString(nodeName))
+				err = vs.nodeManager.RediscoverNode(nodeName)
 				if err != nil {
 					if err == vclib.ErrNoVMFound {
 						glog.V(4).Infof("node %s not found. err: %+v", nodeName, err)
