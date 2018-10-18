@@ -24,10 +24,6 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 )
 
-var (
-	PrefixPVCLabel = "vmware#cns#pvc"
-)
-
 type CSP struct {
 	*VCP
 	virtualCenterManager cspvsphere.VirtualCenterManager
@@ -74,6 +70,13 @@ func (csp *CSP) SetInformers(informerFactory informers.SharedInformerFactory) {
 	})
 	glog.V(4).Infof("PVC informers in vSphere cloud provider initialized")
 
+	pvInformer := informerFactory.Core().V1().PersistentVolumes().Informer()
+	pvInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		UpdateFunc: csp.PVUpdated,
+		DeleteFunc: csp.PVDeleted,
+	})
+	glog.V(4).Infof("PV informers in vSphere cloud provider initialized")
+
 	csp.PVLister = informerFactory.Core().V1().PersistentVolumes().Lister()
 	glog.V(4).Infof("PV lister in vSphere cloud provider initialized")
 
@@ -108,6 +111,64 @@ func (csp *CSP) NodeDeleted(obj interface{}) {
 	csp.nodeManager.UnregisterNode(node.Name)
 }
 
+func (csp *CSP) PVUpdated(oldObj, newObj interface{}) {
+	oldPv, ok := oldObj.(*v1.PersistentVolume)
+
+	if oldPv == nil || !ok {
+		return
+	}
+
+	newPv, ok := newObj.(*v1.PersistentVolume)
+
+	if newPv == nil || !ok {
+		return
+	}
+
+	if newPv.Status.Phase == v1.VolumePending || newPv.Status.Phase == v1.VolumeFailed  {
+		return
+	}
+
+
+	if oldPv.Spec.PersistentVolumeSource.VsphereVolume == nil {
+		return
+	}
+
+	if oldPv.Status.Phase == v1.VolumePending && v1helper.GetPersistentVolumeClass(newPv) == "" {
+		// Call CNS Get Volume API to check if pv is a cns volume
+			// If CNS Volume
+				// Update Labels
+			// Else
+				// Call CreateVolume API
+		return
+	}
+
+	newLabels := newPv.GetLabels()
+	oldLabels := oldPv.GetLabels()
+	labelsEqual := reflect.DeepEqual(newLabels, oldLabels)
+
+	if !labelsEqual {
+		// Update Labels
+	}
+}
+
+func (csp *CSP) PVDeleted(obj interface{}) {
+	pv, ok := obj.(*v1.PersistentVolume)
+	if pv == nil || !ok {
+		glog.Warningf("PVDeleted: unrecognized object %+v", obj)
+		return
+	}
+	glog.V(4).Infof("PV deleted: %+v", pv)
+	if pv.Spec.PersistentVolumeSource.VsphereVolume == nil {
+		return
+	}
+	// Volume will be deleted by volume plugin
+	if pv.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimDelete {
+		return
+	}
+	// If the PV is retain we need to delete PV labels
+	// Update Labels
+}
+
 func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
 	oldPvc, ok := oldObj.(*v1.PersistentVolumeClaim)
 
@@ -135,43 +196,17 @@ func (csp *CSP) PVCUpdated(oldObj, newObj interface{}) {
 		return
 	}
 
+	if oldPvc.Status.Phase == v1.ClaimPending && v1helper.GetPersistentVolumeClaimClass(newPvc) == "" {
+		// Call CNS Update Volume
+		return
+	}
+
 	newLabels := newPvc.GetLabels()
 	oldLabels := oldPvc.GetLabels()
 	labelsEqual := reflect.DeepEqual(newLabels, oldLabels)
 
 	if !labelsEqual {
-		glog.V(4).Infof("Updating %#v labels to %#v in cns for volume %s", oldLabels, newLabels, pv.Spec.PersistentVolumeSource.VsphereVolume.VolumePath)
-		vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
-		if err != nil {
-			glog.Errorf("Cannot get virtual center object for server %s with error %+v", csp.cfg.Workspace.VCenterIP, err)
-			return
-		}
-		prefixedLabels := AddPrefixToLabels(PrefixPVCLabel, newLabels)
-		glog.V(4).Infof("Prefixed Labels are %+v", prefixedLabels)
-		// TODO: Replace it with GetVolumeInfo CNS API once available
-		if v1helper.GetPersistentVolumeClass(pv) == "" {
-			glog.V(4).Infof("Volume %v is provisioned statically", pv.Spec.PersistentVolumeSource.VsphereVolume.VolumeID)
-			createSpec := &cspvolumestypes.CreateSpec{
-				Name: pv.Name,
-				ContainerCluster: cspvolumestypes.ContainerCluster{
-					ClusterID:   csp.cfg.Global.ClusterID,
-					ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
-				},
-				DatastoreURLs: []string{pv.Spec.PersistentVolumeSource.VsphereVolume.DatastoreURL},
-				BackingInfo:   &cspvolumestypes.BlockBackingInfo{BackingDiskID: pv.Spec.PersistentVolumeSource.VsphereVolume.VolumeID},
-				Labels:        prefixedLabels,
-			}
-			csp.volumeManager.CreateVolume(createSpec)
-			return
-		}
-		updateSpec := &cspvolumestypes.UpdateSpec{
-			VolumeID: &cspvolumestypes.VolumeID{
-				ID:           pv.Spec.PersistentVolumeSource.VsphereVolume.VolumeID,
-				DatastoreURL: pv.Spec.PersistentVolumeSource.VsphereVolume.DatastoreURL,
-			},
-			Labels: prefixedLabels,
-		}
-		cspvolumes.GetManager(vc).UpdateVolume(updateSpec)
+		// Update Labels
 	}
 }
 
@@ -190,22 +225,11 @@ func (csp *CSP) PVCDeleted(obj interface{}) {
 	if pv.Spec.PersistentVolumeSource.VsphereVolume == nil {
 		return
 	}
+	// Volume will be deleted by volume plugin
 	if pv.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimDelete {
 		return
 	}
-	// If the PV is retain we need to delete PVC labels
-	updateSpec := &cspvolumestypes.UpdateSpec{
-		VolumeID: &cspvolumestypes.VolumeID{
-			ID:           pv.Spec.PersistentVolumeSource.VsphereVolume.VolumeID,
-			DatastoreURL: pv.Spec.PersistentVolumeSource.VsphereVolume.DatastoreURL,
-		},
-	}
-	vc, err := csp.virtualCenterManager.GetVirtualCenter(csp.cfg.Workspace.VCenterIP)
-	if err != nil {
-		glog.Errorf("Cannot get virtual center object for server %s with error %+v", csp.cfg.Workspace.VCenterIP, err)
-		return
-	}
-	cspvolumes.GetManager(vc).UpdateVolume(updateSpec)
+	// Update Labels
 }
 
 // Instances returns an implementation of Instances for vSphere.
@@ -451,7 +475,7 @@ func (csp *CSP) CreateVSphereVolume(spec *CreateVolumeSpec) (VolumeID, error) {
 			ClusterID:   csp.cfg.Global.ClusterID,
 			ClusterType: cspvolumestypes.ClusterTypeKUBERNETES,
 		},
-		Labels: AddPrefixToLabels(PrefixPVCLabel, spec.PVC.Labels),
+		Labels: spec.PVC.Labels,
 	}
 	glog.V(5).Infof("vSphere Cloud Provider creating volume %s with create spec %+v", spec.Name, spew.Sdump(createSpec))
 	volumeID, err := cspvolumes.GetManager(vc).CreateVolume(createSpec)
@@ -640,15 +664,6 @@ func getPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.Per
 	}
 
 	return pv.DeepCopy(), nil
-}
-
-func AddPrefixToLabels(prefix string, labels map[string]string) map[string]string {
-	prefixedLabels := make(map[string]string)
-	for labelKey, labelValue := range labels {
-		prefixedKey := strings.Join([]string{prefix, labelKey}, "#")
-		prefixedLabels[prefixedKey] = labelValue
-	}
-	return prefixedLabels
 }
 
 func GetSharedDatastoresInK8SCluster(ctx context.Context, nodeManager nodemanager.Manager) ([]string, error) {
